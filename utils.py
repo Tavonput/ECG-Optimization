@@ -1,12 +1,16 @@
 import time
-from dataclasses import dataclass
+import json
+import os
+from copy import deepcopy
+from dataclasses import dataclass, asdict
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim import *
 from torch.optim.lr_scheduler import *
-from torchprofile import profile_macs
+
+from thop import profile
 
 import numpy as np
 import seaborn as sns
@@ -85,14 +89,48 @@ GiB = 1024 * MiB
 
 @dataclass
 class ModelStats:
-    macs:     int
-    params:   int
-    latency:  float
-    accuracy: float
-    name:     str = "My Model"
+    name:     str   = "My Model"
+    macs:     int   = 0
+    params:   int   = 0
+    latency:  float = 0
+    accuracy: float = 0
     
+def add_model_stat_to_json(path: str, data: ModelStats) -> None:
+    print(f"[INFO]: Adding model stat to {path}")
+    if not os.path.exists(path):
+        with open(path, "w") as _:
+            pass
+
+    with open(path, "r") as file:
+        try:
+            database = json.load(file)
+        except:
+            database = []
+
+    database.append(asdict(data))
+    with open(path, "w") as file:
+        json.dump(database, file, indent=4)
+
+def get_model_stats_from_json(path: str, model_names: list[str]) -> list[ModelStats]:
+    if not os.path.exists(path):
+        print(f"Path does not exist {path}")
+        return None
+
+    with open(path, "r") as file:
+        try:
+            database = json.load(file)
+        except:
+            print(f"There is no data in {path}")
+            return None
+        
+    # Get all model stats for the provided names
+    model_stats = filter(lambda x: x["name"] in model_names, database)
+    model_stats = map(lambda x: ModelStats(**x), model_stats)
+    return list(model_stats)
+
 def get_model_macs(model: nn.Module, inputs: torch.Tensor) -> int:
-    return profile_macs(model, inputs)
+    macs, _ = profile(model, inputs=(inputs,), verbose=False)
+    return macs
 
 def get_num_parameters(model: nn.Module) -> int:
     num_counted_elements = 0
@@ -106,19 +144,21 @@ def measure_latency(
     dummy_input: torch.Tensor, 
     n_warmup:    int = 50, 
     n_test:      int = 50,
+    test_device: str = "cpu",
 ) -> float:
     model.eval()
+    model.to(test_device)
 
     # Warmup
     for _ in range(n_warmup):
-        _ = model(dummy_input)
+        _ = model(dummy_input.to(test_device))
 
     # Real test
     times = []
     for _ in range(0, 10):
         t1 = time.time()
         for _ in range(n_test):
-            _ = model(dummy_input)
+            _ = model(dummy_input.to(test_device))
         t2 = time.time()
         times.append((t2 - t1) / n_test)
     
@@ -134,19 +174,31 @@ def benchmark_dataloader(dataloader: DataLoader, num_batches: int = 100) -> floa
     return (end_time - start_time) / num_batches
 
 def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str) -> ModelStats:
+    print(f"[INFO]: Benchmarking model {name}")
     model.eval()
     model.to("cpu")
 
     dummy_input = next(iter(dataloader))[0][0].unsqueeze(0)
 
-    macs    = get_model_macs(model, dummy_input)
+    print(f"[INFO]: \tGetting model params and MACs")
+    macs    = get_model_macs(deepcopy(model).to(torch.float32), dummy_input.clone().to(torch.float32))
     params  = get_num_parameters(model)
+
+    print(f"[INFO]: \tMeasuring latency")
     latency = measure_latency(model, dummy_input)
 
+    print(f"[INFO]: \tEvaluating")
     model.to(device)
     accuracy = evaluate(model, dataloader)
 
-    return ModelStats(macs, params, latency, accuracy, name)
+    print(f"[INFO]: Benchmarking for {name} finished")
+    return ModelStats(
+        macs     = macs, 
+        params   = params, 
+        latency  = latency, 
+        accuracy = accuracy, 
+        name     = name
+    )
 
 def compare_models(
     models_stats: list[ModelStats], 

@@ -1,0 +1,17 @@
+numpy
+pandas
+matplotlib
+seaborn
+tqdm
+
+torch
+torchvision
+torch_pruning
+thop
+
+tensorrt
+pycuda
+
+scikit-learn
+imbalance-learn
+pyts

@@ -1,0 +1,170 @@
+[
+    {
+        "name": "AlexNet",
+        "macs": 308036544.0,
+        "params": 42322757,
+        "latency": 0.009600733757019043,
+        "accuracy": 97.94902038574219
+    },
+    {
+        "name": "VGG16",
+        "macs": 7145513472.0,
+        "params": 134289477,
+        "latency": 0.06609613609313965,
+        "accuracy": 98.61135864257812
+    },
+    {
+        "name": "ResNet18",
+        "macs": 880630784.0,
+        "params": 11179077,
+        "latency": 0.012333220958709718,
+        "accuracy": 98.38754272460938
+    },
+    {
+        "name": "MobileNetV3 Large",
+        "macs": 115935624.0,
+        "params": 4208437,
+        "latency": 0.012451328754425048,
+        "accuracy": 98.140869140625
+    },
+    {
+        "name": "MobileNetV3 Small",
+        "macs": 30815864.0,
+        "params": 1522981,
+        "latency": 0.006600005149841308,
+        "accuracy": 97.94902038574219
+    },
+    {
+        "name": "OFA 595M",
+        "macs": 268729152.0,
+        "params": 7606613,
+        "latency": 0.01713559150695801,
+        "accuracy": 98.3692626953125
+    },
+    {
+        "name": "OFA Pixel 1 20ms",
+        "macs": 81823968.0,
+        "params": 3029997,
+        "latency": 0.0085317645072937,
+        "accuracy": 98.02667236328125
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 80",
+        "macs": 9739880.0,
+        "params": 1522981,
+        "latency": 0.004618202209472656,
+        "accuracy": 97.23186492919922
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 104",
+        "macs": 16759400.0,
+        "params": 1522981,
+        "latency": 0.005060604095458984,
+        "accuracy": 97.34606170654297
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 128",
+        "macs": 20779832.0,
+        "params": 1522981,
+        "latency": 0.005621114253997803,
+        "accuracy": 97.31865692138672
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 152",
+        "macs": 30815864.0,
+        "params": 1522981,
+        "latency": 0.006585991859436036,
+        "accuracy": 97.94445037841797
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 176",
+        "macs": 40392680.0,
+        "params": 1522981,
+        "latency": 0.007468794345855713,
+        "accuracy": 97.73432922363281
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 200",
+        "macs": 54157160.0,
+        "params": 1522981,
+        "latency": 0.00816542911529541,
+        "accuracy": 97.93074798583984
+    },
+    {
+        "name": "MobileNetV3 Small - Resolution 224",
+        "macs": 61459064.0,
+        "params": 1522981,
+        "latency": 0.0082975492477417,
+        "accuracy": 97.92161560058594
+    },
+    {
+        "name": "VGG16 - Layer Pruned 0.5",
+        "macs": 1802596608.0,
+        "params": 33583141,
+        "latency": 0.022504476547241213,
+        "accuracy": 98.52914428710938
+    },
+    {
+        "name": "VGG16 - Global Pruned 0.5",
+        "macs": 1119280776.0,
+        "params": 31431868,
+        "latency": 0.018086455821990966,
+        "accuracy": 98.24593353271484
+    },
+    {
+        "name": "VGG16 - Layer Pruned 0.6",
+        "macs": 1143016118.0,
+        "params": 21408275,
+        "latency": 0.017465891361236573,
+        "accuracy": 98.35556030273438
+    },
+    {
+        "name": "VGG16 - Global Pruned 0.6",
+        "macs": 917489766.0,
+        "params": 20967444,
+        "latency": 0.014774259090423583,
+        "accuracy": 98.22309112548828
+    },
+    {
+        "name": "VGG16 - Layer Pruned 0.7",
+        "macs": 646389906.0,
+        "params": 12037954,
+        "latency": 0.011061421394348143,
+        "accuracy": 98.20025634765625
+    },
+    {
+        "name": "VGG16 - Global Pruned 0.7",
+        "macs": 743809697.0,
+        "params": 12570641,
+        "latency": 0.01232120895385742,
+        "accuracy": 98.20481872558594
+    },
+    {
+        "name": "VGG16 - Layer Pruned 0.8",
+        "macs": 286521578.0,
+        "params": 5355614,
+        "latency": 0.006559968948364259,
+        "accuracy": 97.93988800048828
+    },
+    {
+        "name": "VGG16 - Global Pruned 0.8",
+        "macs": 576288794.0,
+        "params": 6222296,
+        "latency": 0.010193273067474366,
+        "accuracy": 98.43778991699219
+    },
+    {
+        "name": "VGG16 - Layer Pruned 0.9",
+        "macs": 72894972.0,
+        "params": 1338391,
+        "latency": 0.002966700553894043,
+        "accuracy": 97.5835952758789
+    },
+    {
+        "name": "VGG16 - Global Pruned 0.9",
+        "macs": 416233629.0,
+        "params": 1431920,
+        "latency": 0.008139404296875,
+        "accuracy": 97.93074798583984
+    }
+]
