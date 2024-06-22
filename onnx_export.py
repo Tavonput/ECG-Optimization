@@ -1,8 +1,8 @@
 import argparse
 
 from Quantization.export import export_to_onnx
-from model_loading import load_model_from_pretrained
-from dataset import ArrhythmiaLabels
+from Utils.model_loading import load_model_from_pretrained
+from Utils.dataset import ArrhythmiaLabels
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -20,7 +20,7 @@ def parse_args():
 
     return args
     
-# ---------------------------------------------------------------------------------------------------------------------
+# ************************************************************************************************************************
 # Main
 #
 def main():

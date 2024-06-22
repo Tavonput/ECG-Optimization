@@ -8,10 +8,12 @@ from tqdm.auto import tqdm
 
 from .inference import *
 
+
 Byte = 8
-KiB = 1024 * Byte
-MiB = 1024 * KiB
-GiB = 1024 * MiB
+KiB  = 1024 * Byte
+MiB  = 1024 * KiB
+GiB  = 1024 * MiB
+
 
 @dataclass
 class ModelStats:
@@ -21,7 +23,16 @@ class ModelStats:
     latency:  float = 0
     accuracy: float = 0
 
+
 def evaluate_trt(engine_path: str, dataloader: DataLoader) -> float:
+    """
+    Evaluate a TensorRt engine with a PyTorch dataloader.
+
+    @param engine_path: Path to TensorRT engine.
+    @param dataloader: Testing dataloader.
+
+    @return Accuracy.
+    """
     trt_context = create_trt_context(engine_path)
     
     # Setup inputs and outputs
@@ -50,7 +61,17 @@ def evaluate_trt(engine_path: str, dataloader: DataLoader) -> float:
     
     return (num_correct / num_samples * 100).item()
 
+
 def measure_latency(engine_path: str, n_warmup: int = 50, n_test: int = 50) -> float:
+    """
+    Measure the latency of a TensorRT engine. Latency testing is ran 10 times and then averaged.
+
+    @param engine_path: Path to TensorRT engine.
+    @param n_warmup: Number of warmup iterations.
+    @param n_test: Number of forward passes.
+
+    @return Latency in seconds.
+    """
     trt_context = create_trt_context(engine_path)
 
     # Setup inputs and outputs
@@ -84,7 +105,17 @@ def measure_latency(engine_path: str, n_warmup: int = 50, n_test: int = 50) -> f
 
     return sum(times) / len(times)
 
+
 def benchmark_model_trt(engine_path: str, dataloader: DataLoader, name: str) -> ModelStats:
+    """
+    Benchmark a TensorRT engine for accuracy and latency. Does not set the parameter count or MACs.
+
+    @param engine_path: Path to TensorRT engine.
+    @param dataloader: Testing dataloader.
+    @param name: Name to attach to results.
+
+    @return ModelStats instance without param or macs set.
+    """
     print(f"[INFO]: Benchmarking TensorRT model {name} from {engine_path}")
 
     print(f"[INFO]: \tEvaluating")

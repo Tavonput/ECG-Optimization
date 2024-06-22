@@ -6,6 +6,7 @@ import pycuda.driver as cuda
 
 import numpy as np
 
+
 @dataclass
 class Buffer:
     host:   np.array
@@ -15,6 +16,7 @@ class Buffer:
     nbytes: int
     name:   str
 
+
 @dataclass
 class TrtContext:
     runtime: trt.Runtime
@@ -23,14 +25,31 @@ class TrtContext:
     logger:  trt.Logger
     stream:  cuda.Stream
 
+
 class DebugListener(trt.IDebugListener):
+    """
+    @class Debug Listener
+
+    TensorRT IDebugListener implementation.
+    """
     def __init__(self):
         super().__init__()
 
     def process_debug_tensor(self, addr, location, type, shape, name, stream):
         print(f"Name: {name}\n\tAddress: {addr}\n\t")
 
+
 def create_trt_context(engine_path: str, log_level: trt.ILogger.Severity = trt.Logger.WARNING) -> TrtContext:
+    """
+    Setup all of the TensorRT stuff for inference.
+
+    @param engine_path: Path to TensorRT engine.
+    @param log_level: Severity level for logging. 
+
+    @return TrtContext containing all inference objects.
+
+    TODO: Don't use trt severity as an input. The user should not need to know about trt severity enums.
+    """
     logger  = trt.Logger(log_level)
 
     runtime = trt.Runtime(logger)
@@ -54,7 +73,16 @@ def create_trt_context(engine_path: str, log_level: trt.ILogger.Severity = trt.L
         stream  = stream,
     )
 
-def allocate_buffers(engine: trt.ICudaEngine, data_type:np.dtype):
+
+def allocate_buffers(engine: trt.ICudaEngine, data_type:np.dtype) -> tuple[list[Buffer], list[Buffer]]:
+    """
+    Allocate IO buffers. Host memory is pagelocked.
+
+    @param engine: TensorRT engine.
+    @param data_type: Numpy dtype used for memory allocation.
+
+    @return IO buffers.
+    """
     inputs = []
     outputs = []
     for binding in engine:
@@ -79,11 +107,26 @@ def allocate_buffers(engine: trt.ICudaEngine, data_type:np.dtype):
     
     return inputs, outputs
 
-def copy_data_to_host_buffer(buffer: Buffer, data: np.array):
+
+def copy_data_to_host_buffer(buffer: Buffer, data: np.array) -> None:
+    """
+    Copy data into the host memory of a buffer.
+
+    @param buffer: Buffer to transfer data into.
+    @param data: Data to transfer.
+    """
     assert data.size == buffer.host.size
     np.copyto(buffer.host, np.ascontiguousarray(data.flat))
 
-def inference(trt_cxt: TrtContext, inputs: Buffer, outputs: Buffer):
+
+def inference(trt_cxt: TrtContext, inputs: list[Buffer], outputs: list[Buffer]) -> None:
+    """
+    Inference a TensorRT engine.
+
+    @param trt_cxt: TrtContext built on the engine to inference.
+    @param inputs: Input Buffers.
+    @param outputs: Output Buffers
+    """
     # Inputs: Host => Device
     [cuda.memcpy_htod_async(inp.device, inp.host, trt_cxt.stream) for inp in inputs]
 

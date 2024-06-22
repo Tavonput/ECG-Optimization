@@ -6,9 +6,17 @@ from torchvision.models import *
 import torch_pruning as tp
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-ofa_specialized_get = torch.hub.load("mit-han-lab/once-for-all", "ofa_specialized_get")
+ofa_specialized_get = torch.hub.load("mit-han-lab/once-for-all", "ofa_specialized_get", verbose=False)
+
 
 def load_model(name: str) -> nn.Module:
+    """
+    Load pretrained model from torchvision.
+
+    @param: Name of the model.
+
+    @return: Pretrained model.
+    """
     match name:
         case "alexnet":
             return alexnet(weights=AlexNet_Weights.DEFAULT)
@@ -26,8 +34,19 @@ def load_model(name: str) -> nn.Module:
             return mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V2)
         case "mobilenet_v3_small":
             return mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.DEFAULT)
-    
+
+
 def load_model_from_pretrained(name: str, path: str, num_classes: int) -> nn.Module:
+    """
+    Load a torchvision vision model from a state dict checkpoint. The final layer output will be replaced 
+    with the specified number of classes.
+
+    @param name: Name of model.
+    @param path: Path to state dict checkpoint.
+    @param num_classes: Number of classes the final layer should output.
+
+    @return Model loaded from a weight state dict.
+    """
     model = None
     match name:
         case "alexnet":
@@ -74,12 +93,23 @@ def load_model_from_pretrained(name: str, path: str, num_classes: int) -> nn.Mod
     model.load_state_dict(torch.load(path))
     return model
 
+
 def load_vgg_from_pruned(
     path:          str, 
     pruning_ratio: float, 
     dummy_input:   torch.Tensor,
     num_classes:   int = 5,
 ) -> nn.Module:
+    """
+    Load a pretrained torchvision VGG16_BN that has been pruned at the layer level.
+
+    @param path: Path to the state dict checkpoint.
+    @param pruning_ratio: Pruning ratio that the model was pruned at.
+    @param dummy_input: Dummy input for tracing.
+    @param num_classes: Number of classes the output layer should have.
+
+    @return Pretrained pruned VGG.
+    """
     model = vgg16_bn()
     model.classifier[6] = nn.Linear(4096, num_classes)
     ignored_layers = [model.classifier[6]]

@@ -2,7 +2,21 @@ import os
 
 import torch
 
-def export_to_onnx(model, image_size, batch_size, export_path) -> None:
+
+def export_to_onnx(
+    model:       torch.nn.Module, 
+    image_size:  int, 
+    batch_size:  int, 
+    export_path: str
+) -> None:
+    """
+    Export a PyTorch model to ONNX.
+
+    @param model: Model to export.
+    @param image_size: Image size.
+    @param batch_size: Batch size.
+    @param export_path: Path to save the ONNX model.
+    """
     # Setup dummy input
     dummy_input = torch.randn((batch_size, 3, image_size, image_size))
 

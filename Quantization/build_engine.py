@@ -2,7 +2,15 @@ import os
 
 import tensorrt as trt
 
+
 def inspect_engine(engine_path: str, logger: trt.Logger, input_shape: tuple) -> None:
+    """
+    Log detailed engine description with an inspector. Saves everything to engine_inspector_log.txt.
+
+    @param engine_path: Path to TensorRT engine.
+    @param logger: TensorRT logger.
+    @param input_shape: Input shape.
+    """
     runtime = trt.Runtime(logger)
     assert runtime
 
@@ -21,7 +29,21 @@ def inspect_engine(engine_path: str, logger: trt.Logger, input_shape: tuple) -> 
 
     print("[INFO]: Engine inspector logged to engine_inspector_log.txt")
 
+
 def build_engine(onnx_path, engine_path) -> None:
+    """
+    Build a TensorRT engine.
+
+    @param onnx_path: Path to ONNX model.
+    @param engine_path: Path to save the engine.
+
+    TODO: 
+    - Get dynamic batching to work. 
+    - There is a CUDA memory access bug with high batch sizes during inference.
+    - Allow choice of precision.
+    - Do you need to use obey precision constrains?
+    - INT8 quantization with calibration.
+    """
     TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
     builder = trt.Builder(TRT_LOGGER)

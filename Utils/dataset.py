@@ -1,11 +1,9 @@
 import random
 import h5py
-import os
 
 import torch
-import torch.nn as nn
 
-from torchvision.transforms import *
+from torchvision.transforms import Compose, ToTensor
 from torch.utils.data import DataLoader, Dataset
 
 import numpy as np
@@ -13,7 +11,13 @@ import matplotlib.pyplot as plt
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 class ArrhythmiaLabels:
+    """
+    @class Arrhythmia Labels
+
+    Access to the labels and size of the MIT-BIH dataset.
+    """
     labels = {
         0: "N",
         1: "S",
@@ -23,7 +27,18 @@ class ArrhythmiaLabels:
     }
     size = 5
 
+
 class EcgDataset(Dataset):
+    """
+    @class ECG Dataset
+
+    ECG dataset from MIT-BIH transformed into images and loaded from a HDF5 file. To be used with PyTorch DataLoader.
+
+    @param file_path: Path to HDF5 dataset file.
+    @param transform: Additional tensor transforms to apply.
+    @param preload: Whether or not the data should be preloaded host memory.
+    @param half_precision: Whether or not the data should sent to FP16
+    """
     def __init__(self, file_path: str, transform=None, preload=False, half_precision=False) -> None:
         super().__init__()
 
@@ -67,6 +82,7 @@ class EcgDataset(Dataset):
 
         return image, label
     
+
 def build_dataloader(
     train_path:     str, 
     test_path:      str, 
@@ -75,6 +91,22 @@ def build_dataloader(
     preload:        bool = False,
     half_precision: bool = False,
 ) -> dict[str, DataLoader]:
+    """
+    Build the train and test dataloaders from EcgDataset.
+
+    @param train_path: Path to HDF5 training set.
+    @param test_path: Path to HDF5 test set.
+    @param batch_size: Batch size for train and test sets.
+    @param transform: PyTorch transform to apply on the images after tensor conversion.
+    @param preload: Whether or not the data should be preloaded into host memory.
+    @param half_precision: Whether or not the data should be loaded as FP16.
+
+    @return Dictionary containing two entries:
+        "train": Training dataloader
+        "test":  Testing dataloader
+
+    TODO: Transforms provided by the user should be a list of transforms rather than just one.
+    """
     transforms = {
         "train": Compose([
             ToTensor(),
@@ -103,7 +135,13 @@ def build_dataloader(
 
     return dataloader
 
+
 def visualize_ecg_data(dataloader: DataLoader) -> None:
+    """
+    Visualize the transformed ECG data.
+
+    @param dataloader: Dataloader for the ECG data.
+    """
     batch = next(iter(dataloader))
     num_images = len(batch[0])
 

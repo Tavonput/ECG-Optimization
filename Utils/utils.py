@@ -19,9 +19,10 @@ from tqdm.auto import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-#######################################################################################################
+
+# ************************************************************************************************************************
 # Training And Eval
-#######################################################################################################
+#
 def train(
     model:      nn.Module,
     dataloader: DataLoader,
@@ -29,6 +30,15 @@ def train(
     optimizer:  Optimizer,
     scheduler:  LambdaLR
 ) -> None:
+    """
+    Train a model for one epoch.
+
+    @param model: Model to train.
+    @param dataloader: Training dataloader.
+    @param criterion: Criterion.
+    @param optimizer: Optimizer.
+    @param scheduler: Scheduler.
+    """
     model.train()
 
     for inputs, labels in tqdm(dataloader, desc="Train", leave=False):
@@ -45,12 +55,22 @@ def train(
         optimizer.step()
         scheduler.step()
 
+
 @torch.inference_mode()
 def evaluate(
     model:      nn.Module,
     dataloader: DataLoader,
     verbose:    bool = True
 ) -> float:
+    """
+    Evaluate a model.
+
+    @param model: Model to evaluate.
+    @param dataloader: Testing dataloader.
+    @param verbose: Verbosity.
+
+    @return Accuracy.
+    """
     model.eval()
 
     num_samples = 0
@@ -68,7 +88,14 @@ def evaluate(
     
     return (num_correct / num_samples * 100).item()
 
-def warm_up_dataloader(dataloader, num_batches: int = 0):
+
+def warm_up_dataloader(dataloader, num_batches: int = 0) -> None:
+    """
+    Warmup a dataloader by iterating over the batches and doing nothing. Can help with caching.
+
+    @param dataloader: Dataloader to warmup.
+    @param num_batches: Number of batches to load. If not specified, all batches will be used.
+    """
     if num_batches == 0:
         for images, labels in tqdm(dataloader, desc="Warm-up", leave=False):
             continue
@@ -79,13 +106,14 @@ def warm_up_dataloader(dataloader, num_batches: int = 0):
                 break
             i += 1
 
-#######################################################################################################
+
+# ************************************************************************************************************************
 # Benchmarking
-#######################################################################################################
+#
 Byte = 8
-KiB = 1024 * Byte
-MiB = 1024 * KiB
-GiB = 1024 * MiB
+KiB  = 1024 * Byte
+MiB  = 1024 * KiB
+GiB  = 1024 * MiB
 
 @dataclass
 class ModelStats:
@@ -95,7 +123,14 @@ class ModelStats:
     latency:  float = 0
     accuracy: float = 0
     
+
 def add_model_stat_to_json(path: str, data: ModelStats) -> None:
+    """
+    Append a ModelStats instance to a json that stores a list of ModelStats.
+
+    @param path: Path to json file.
+    @param data: ModelStats instance to add.
+    """
     print(f"[INFO]: Adding model stat to {path}")
     if not os.path.exists(path):
         with open(path, "w") as _:
@@ -111,7 +146,16 @@ def add_model_stat_to_json(path: str, data: ModelStats) -> None:
     with open(path, "w") as file:
         json.dump(database, file, indent=4)
 
+
 def get_model_stats_from_json(path: str, model_names: list[str]) -> list[ModelStats]:
+    """
+    Get a list of ModelStats instances from a json file by name searching.
+
+    @param path: Path to json file.
+    @param model_names: List of names corresponding to the ModelStats to retrieve.
+
+    @return List of ModelStats.
+    """
     if not os.path.exists(path):
         print(f"Path does not exist {path}")
         return None
@@ -128,15 +172,33 @@ def get_model_stats_from_json(path: str, model_names: list[str]) -> list[ModelSt
     model_stats = map(lambda x: ModelStats(**x), model_stats)
     return list(model_stats)
 
+
 def get_model_macs(model: nn.Module, inputs: torch.Tensor) -> int:
+    """
+    Get model MACs through thop profile.
+
+    @param model: Model to profile.
+    @param inputs: Dummy input.
+
+    @return Number of MACs.
+    """
     macs, _ = profile(model, inputs=(inputs,), verbose=False)
     return macs
 
+
 def get_num_parameters(model: nn.Module) -> int:
+    """
+    Get the  number of parameters in a model.
+
+    @param model: Model to profile:
+
+    @return Number of parameters.
+    """
     num_counted_elements = 0
     for param in model.parameters():
         num_counted_elements += param.numel()
     return num_counted_elements
+
 
 @torch.no_grad()
 def measure_latency(
@@ -146,6 +208,19 @@ def measure_latency(
     n_test:      int = 50,
     test_device: str = "cpu",
 ) -> float:
+    """
+    Measure the latency of a model. Latency will be measured 10 times and averaged.
+
+    @param model: Model to profile.
+    @param dummy_input: Dummy input that will run through the model.
+    @param n_warmup: Number of warmup iterations.
+    @param n_test: Number of forward passes.
+    @param test_device: Device to test on.
+
+    @return Latency in seconds.
+
+    TODO: Maybe GPU testing should be done separately to match the TensorRT latency benchmark.
+    """
     model.eval()
     model.to(test_device)
 
@@ -164,7 +239,16 @@ def measure_latency(
     
     return sum(times) / len(times)
 
+
 def benchmark_dataloader(dataloader: DataLoader, num_batches: int = 100) -> float:
+    """
+    Test how long it takes to load a batch from a dataloader.
+
+    @param dataloader: Dataloader to profile.
+    @param num_batches: Number of batches to test.
+
+    @return Time to load one batch in seconds.
+    """
     start_time = time.time()
     for i, (images, labels) in enumerate(dataloader):
         if i >= num_batches - 1:
@@ -173,7 +257,17 @@ def benchmark_dataloader(dataloader: DataLoader, num_batches: int = 100) -> floa
     end_time = time.time()
     return (end_time - start_time) / num_batches
 
+
 def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str) -> ModelStats:
+    """
+    Benchmark a model for accuracy, latency, parameter count, and MACs.
+
+    @param model: Model to benchmark.
+    @param dataloader: Testing dataloader.
+    @param name: Name to be attached with the results.
+
+    @return ModelStats instance.
+    """
     print(f"[INFO]: Benchmarking model {name}")
     model.eval()
     model.to("cpu")
@@ -200,12 +294,21 @@ def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str) -> Mode
         name     = name
     )
 
+
 def compare_models(
     models_stats: list[ModelStats], 
     show_macs:    bool = True, 
     show_params:  bool = True,
     fig_size:     tuple = (10, 4)
 ) -> None:
+    """
+    Compare a list of ModelStats displayed with a bar graphs.
+
+    @param model_stats: List of ModelStats to compare.
+    @param show_macs: Whether or not to show the MACs plot.
+    @param show_params: Whether or not to show the params plot.
+    @param fig_size: Figure size of the plots.
+    """
     sns.set_style("whitegrid")
 
     names   = [model.name for model in models_stats]
@@ -243,17 +346,35 @@ def compare_models(
     plt.tight_layout()
     plt.show()
 
+
 def display_model_stats(model_stats: ModelStats) -> None:
+    """
+    Formatted display of a ModelStats instance.
+
+    @param model_stats: ModelStats instance.
+    """
     print(f"Name:     {model_stats.name}")
     print(f"Accuracy: {model_stats.accuracy:.2f}%")
     print(f"Latency:  {round(model_stats.latency * 1000, 1)} ms")
     print(f"Params:   {round(model_stats.params / 1e6)} M")
     print(f"MACs:     {round(model_stats.macs / 1e6)} M")
 
+
 def get_dataset_size(image_size: int, channels: int, num_images: int, data_width: int) -> float:
+    """
+    Get the size of a dataset in GiB. Images must be square.
+
+    @param image_size: Image resolution.
+    @param channels: Number of channels.
+    @param num_images: Number of images.
+    @param data_width: Bit size of each value.
+
+    @return Dataset size in GiB.
+    """
     pixels = image_size * image_size * channels
     bits   = pixels * data_width
     return (bits / GiB) * num_images
+
 
 def compare_single_values(
     values: list[float], 
@@ -261,6 +382,14 @@ def compare_single_values(
     axis:   str = None, 
     title:  str = None
 ) -> None:
+    """
+    Compare a list of single values through a bar graph.
+
+    @param values: Values to compare.
+    @param labels: Labels for each value.
+    @param axis: Label of value axis.
+    @param title: Title of plot.
+    """
     sns.set_style("whitegrid")
     colors = sns.color_palette("husl", len(values))
 
@@ -273,6 +402,7 @@ def compare_single_values(
 
     plt.show()
 
+
 def compare_list_values(
     values:  dict[str, list],
     x_axis:  str = None,
@@ -280,6 +410,15 @@ def compare_list_values(
     title:   str = None,
     y_range: tuple = None
 ) -> None:
+    """
+    Compare lists of values through a plot.
+
+    @param values: Dictionary containing {"label": list of values}.
+    @param x_axis: Label for x-axis.
+    @param y_axis: Label for y_axis.
+    @param title: Title.
+    @param r_range: Range of display for the y-axis (min, max).
+    """
     sns.set_style("whitegrid")
     sns.set_palette("husl")
 
