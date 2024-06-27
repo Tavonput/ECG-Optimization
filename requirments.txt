@@ -12,6 +12,7 @@ thop
 tensorrt
 pycuda
 
+opencv_python
 scikit-learn
 imbalance-learn
 pyts

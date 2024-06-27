@@ -166,5 +166,117 @@
         "params": 1431920,
         "latency": 0.008139404296875,
         "accuracy": 97.93074798583984
+    },
+    {
+        "name": "ResNet18 - TRT FP32",
+        "macs": 0,
+        "params": 0,
+        "latency": 0.0007740027189254761,
+        "accuracy": 98.38753882696875
+    },
+    {
+        "name": "ResNet18 - TRT FP16",
+        "macs": 0,
+        "params": 0,
+        "latency": 0.0003378068923950196,
+        "accuracy": 98.37840306961448
+    },
+    {
+        "name": "MobileNetV3 Small - TRT FP32",
+        "macs": 0,
+        "params": 0,
+        "latency": 0.001292373561859131,
+        "accuracy": 97.94445459528595
+    },
+    {
+        "name": "MobileNetV3 Small - TRT FP16",
+        "macs": 0,
+        "params": 0,
+        "latency": 0.00117416627407074,
+        "accuracy": 97.91247944454595
+    },
+    {
+        "name": "ResNet18 - FP16",
+        "macs": 880630784.0,
+        "params": 11179077,
+        "latency": 0.0034244098901748655,
+        "accuracy": 98.38754272460938
+    },
+    {
+        "name": "MobileNetV3 Small - FP16",
+        "macs": 30815864.0,
+        "params": 1522981,
+        "latency": 0.007043296384811401,
+        "accuracy": 97.92617797851562
+    },
+    {
+        "name": "ResNet18 - FP32",
+        "macs": 880630784.0,
+        "params": 11179077,
+        "latency": 0.002860983443260193,
+        "accuracy": 98.38754272460938
+    },
+    {
+        "name": "MobileNetV3 Small - FP32",
+        "macs": 30815864.0,
+        "params": 1522981,
+        "latency": 0.005941089820861816,
+        "accuracy": 97.94902038574219
+    },
+    {
+        "name": "VGG16 Custom 152",
+        "macs": 7076290560.0,
+        "params": 65083461,
+        "latency": 0.060043995380401616,
+        "accuracy": 98.77580261230469
+    },
+    {
+        "name": "VGG16 Custom 152 - FP32",
+        "macs": 7076290560.0,
+        "params": 65083461,
+        "latency": 0.0025073771238327026,
+        "accuracy": 98.77580261230469
+    },
+    {
+        "name": "VGG16 Custom 152 - Layer Pruned 0.8",
+        "macs": 283761458.0,
+        "params": 2598860,
+        "latency": 0.006680065870285035,
+        "accuracy": 98.25506591796875
+    },
+    {
+        "name": "VGG16 Custom 152 - Layer Pruned 0.8 - FP32",
+        "macs": 283761458.0,
+        "params": 2598860,
+        "latency": 0.0023704527854919435,
+        "accuracy": 98.25506591796875
+    },
+    {
+        "name": "VGG16 - Resolution 224",
+        "macs": 15520429056.0,
+        "params": 134289477,
+        "latency": 0.10622562313079835,
+        "accuracy": 98.62506103515625
+    },
+    {
+        "name": "VGG16 - Resolution 224 - FP32",
+        "macs": 15520429056.0,
+        "params": 134289477,
+        "latency": 0.0035948962211608884,
+        "accuracy": 98.62506103515625
+    },
+    {
+        "name": "VGG16 Custom 152 - Layer Pruned 0.8 - TRT INT8",
+        "macs": 283761458.0,
+        "params": 2598860,
+        "latency": 0.00022530455589294434,
+        "accuracy": 95.54631828978623
+    },
+    {
+        "name": "VGG16 Custom 152 - Layer Pruned 0.8 - TRT FP16",
+        "macs": 283761458.0,
+        "params": 2598860,
+        "latency": 0.00024081864356994626,
+        "accuracy": 98.25507034533163
     }
 ]

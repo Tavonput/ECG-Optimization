@@ -70,6 +70,12 @@ def load_model_from_pretrained(name: str, path: str, num_classes: int) -> nn.Mod
             model = vgg16_bn()
             model.classifier[6] = nn.Linear(4096, num_classes)
 
+        case "vgg16_bn_custom":
+            model = vgg16_bn()
+            model.avgpool = nn.AdaptiveAvgPool2d((4, 4))
+            model.classifier[0] = nn.Linear(512 * 4 * 4, 4096)
+            model.classifier[6] = nn.Linear(4096, num_classes)
+
         case "vit_b_16":
             model = vit_b_16()
             model.heads.head = nn.Linear(768, num_classes)
@@ -111,6 +117,45 @@ def load_vgg_from_pruned(
     @return Pretrained pruned VGG.
     """
     model = vgg16_bn()
+    model.classifier[6] = nn.Linear(4096, num_classes)
+    ignored_layers = [model.classifier[6]]
+
+    model.to("cpu")
+    model.eval()
+
+    imp = tp.importance.MagnitudeImportance(p=2)
+    pruner = tp.pruner.MagnitudePruner(
+        model             = model,
+        example_inputs    = dummy_input,
+        importance        = imp,
+        pruning_ratio     = pruning_ratio,
+        ignored_layers    = ignored_layers,
+    )
+    pruner.step()
+
+    model.load_state_dict(torch.load(path))
+    return model
+
+
+def load_vgg_custom_from_pruned(
+    path:          str, 
+    pruning_ratio: float, 
+    dummy_input:   torch.Tensor,
+    num_classes:   int = 5,
+) -> nn.Module:
+    """
+    Load a pretrained torchvision VGG16_BN that has been pruned at the layer level.
+
+    @param path: Path to the state dict checkpoint.
+    @param pruning_ratio: Pruning ratio that the model was pruned at.
+    @param dummy_input: Dummy input for tracing.
+    @param num_classes: Number of classes the output layer should have.
+
+    @return Pretrained pruned VGG.
+    """
+    model = vgg16_bn()
+    model.avgpool = nn.AdaptiveAvgPool2d((4, 4))
+    model.classifier[0] = nn.Linear(512 * 4 * 4, 4096)
     model.classifier[6] = nn.Linear(4096, num_classes)
     ignored_layers = [model.classifier[6]]
 

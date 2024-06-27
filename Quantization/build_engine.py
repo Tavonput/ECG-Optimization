@@ -1,6 +1,149 @@
 import os
+import logging
+
+from dataclasses import dataclass
+
+import numpy as np
 
 import tensorrt as trt
+import pycuda.autoinit
+import pycuda.driver as cuda
+
+from .image_batcher import ImageBatcher
+
+LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FORMAT)
+logging.getLogger("ENG").setLevel(logging.INFO)
+log = logging.getLogger("ENG")
+
+#===========================================================================================================================
+# Calibration
+#
+class EngineCalibrator(trt.IInt8Calibrator):
+    """
+    @class Engine Calibrator
+
+    Implementation of TensorRT IInt8Calibrator.
+    """
+    def __init__(
+        self, 
+        algorithm:  trt.CalibrationAlgoType,
+        cache_dir:  str,
+    ) -> None:
+        super().__init__()
+
+        self.batch_allocation = None
+        self.algorithm        = algorithm
+        self.cache_dir        = cache_dir
+
+        self.image_batcher = None
+
+    
+    def set_image_batcher(self, image_batcher: ImageBatcher) -> None:
+        """
+        Set the image batcher and allocate device memory for batching.
+
+        @param image_batcher: ImageBatcher.
+        """
+        log.info(f"Setting image batcher and allocating {image_batcher.nbytes} bytes of device memory")
+        self.image_batcher    = image_batcher
+        self.batch_allocation = cuda.mem_alloc(image_batcher.nbytes)
+
+
+    def get_algorithm(self) -> trt.CalibrationAlgoType:
+        """
+        Overrides from TensorRT IInt8Calibrator. 
+        Get the algorithm used for calibration.
+
+        @return Calibration algorithm.
+        """
+        return self.algorithm
+    
+
+    def get_batch(self, names: list[str]) -> list[int]:
+        """
+        Overrides from TensorRT IInt8Calibrator.
+
+        @param names: Names of inputs. Not Used.
+
+        @return List of device memory pointers.
+        """
+        if not self.image_batcher:
+            return None
+        
+        try:
+            batch = next(self.image_batcher)
+
+            assert batch.nbytes == self.image_batcher.nbytes, f"{batch.nbytes} != {self.image_batcher.nbytes}"
+            cuda.memcpy_htod(self.batch_allocation, np.ascontiguousarray(batch.flat))
+
+            return [int(self.batch_allocation)]
+        
+        except StopIteration:
+            log.info("Calibration batches finished")
+            return None
+    
+
+    def get_batch_size(self) -> int:
+        """
+        Overrides from TensorRT IInt8Calibrator. 
+        Get the batch size.
+
+        @return Batch size.
+        """
+        if self.image_batcher:
+            return self.image_batcher.batch_size
+        return 1
+    
+
+    def read_calibration_cache(self) -> bytes:
+        """
+        Overrides from TensorRT IInt8Calibrator. 
+        Read the calibration cache file.
+
+        @return Byte stream of calibration cache contents.
+        """
+        if os.path.exists(self.cache_dir):
+            with open(self.cache_dir, "rb") as file:
+                log.info(f"Using calibration cache file {self.cache_dir}")
+                return file.read()
+    
+
+    def write_calibration_cache(self, cache: bytes) -> None:
+        """
+        Overrides from TensorRT IInt8Calibrator.
+        Write calibration cache to disk.
+
+        @param cache: Byte stream content of the calibration cache.
+        """
+        cache_root_dir = os.path.dirname(self.cache_dir)
+        if not os.path.exists(cache_root_dir):
+            os.makedirs(cache_root_dir)
+
+        with open(self.cache_dir, "wb") as file:
+            log.info(f"Writing calibration cache to {self.cache_dir}")
+            file.write(cache)
+
+
+    def display_internal(self) -> None:
+        log.info(f"Engine Calibrator... \n\
+            \tImage Batcher: {self.image_batcher}\n\
+            \tAlgorithm: {self.algorithm}\n\
+            \tCache: {self.cache_dir}\n\
+            \tBatch Size: {self.get_batch_size()}"
+        )
+        
+
+#===========================================================================================================================
+# Engine
+#
+@dataclass
+class CalibrationConfig:
+    dataset:     str
+    cache:       str
+    image_size:  int
+    batch_size:  int
+    max_batches: int
 
 
 def inspect_engine(engine_path: str, logger: trt.Logger, input_shape: tuple) -> None:
@@ -27,10 +170,15 @@ def inspect_engine(engine_path: str, logger: trt.Logger, input_shape: tuple) -> 
     with open("engine_inspector_log.txt", "w") as file:
         file.write(inspector.get_engine_information(trt.LayerInformationFormat.JSON))
 
-    print("[INFO]: Engine inspector logged to engine_inspector_log.txt")
+    log.info("Engine inspector logged to engine_inspector_log.txt")
 
 
-def build_engine(onnx_path, engine_path) -> None:
+def build_engine(
+    onnx_path:    str, 
+    engine_path:  str, 
+    precision:    str, 
+    calib_config: CalibrationConfig = None
+) -> None:
     """
     Build a TensorRT engine.
 
@@ -40,9 +188,6 @@ def build_engine(onnx_path, engine_path) -> None:
     TODO: 
     - Get dynamic batching to work. 
     - There is a CUDA memory access bug with high batch sizes during inference.
-    - Allow choice of precision.
-    - Do you need to use obey precision constrains?
-    - INT8 quantization with calibration.
     """
     TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
@@ -51,31 +196,67 @@ def build_engine(onnx_path, engine_path) -> None:
     parser  = trt.OnnxParser(network, TRT_LOGGER)
 
     # Parse ONNX
-    print(f"[INFO]: Parsing ONNX model {onnx_path}")
+    log.info(f"Parsing ONNX model {onnx_path}")
     with open(onnx_path, "rb") as onnx_model:
         if not parser.parse(onnx_model.read()):
             for i in range(parser.num_errors):
-                print(parser.get_error(i))
-    print(f"[INFO]: Parsing complete")
+                log.error(parser.get_error(i))
+    log.info(f"Parsing complete")
 
     inputs = [network.get_input(i) for i in range(network.num_inputs)]
     outputs = [network.get_output(i) for i in range(network.num_outputs)]
 
-    print("[INFO]: Network description...")
+    log.info("Network description...")
     for input in inputs:
-        print(f"\tName: {input.name}\n\t\tType: {input.dtype}\n\t\tShape: {input.shape}")
+        log.info(f"Name: {input.name} - Type: {input.dtype} - Shape: {input.shape}")
     for output in outputs:
-        print(f"\tName: {output.name}\n\t\tType: {output.dtype}\n\t\tShape: {output.shape}")
+        log.info(f"Name: {output.name} - Type: {output.dtype} - Shape: {output.shape}")
     
     input_shape = inputs[0].shape[1:]
 
     # Config
     config = builder.create_builder_config()
     config.profiling_verbosity= trt.ProfilingVerbosity.DETAILED
-
-    config.set_flag(trt.BuilderFlag.FP16)
     config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
-    
+
+    precision_flag = trt.DataType.FLOAT
+    if precision == "fp16":
+        if not builder.platform_has_fast_fp16:
+            log.warning(f"Platform does not support FP16. Falling back to FP32")
+        else:
+            log.info("Using FP16")
+            precision_flag = trt.DataType.HALF
+            config.set_flag(trt.BuilderFlag.FP16)
+            
+    elif precision == "int8":
+        if not builder.platform_has_fast_int8:
+            log.warning(f"Platform does not support INT8. Falling back to FP32")
+        else:
+            log.info("Using INT8")
+            precision_flag = trt.DataType.INT8
+            config.set_flag(trt.BuilderFlag.INT8)
+            config.int8_calibrator = EngineCalibrator(trt.CalibrationAlgoType.ENTROPY_CALIBRATION_2, calib_config.cache)
+
+            if not calib_config:
+                log.error(f"INT8 wanted but no calibration config was given")
+
+            if not os.path.exists(calib_config.cache):
+                log.info("No calibration cache detected. Building image batcher for calibration")
+                config.int8_calibrator.set_image_batcher(
+                    ImageBatcher(
+                        file_path  = calib_config.dataset,
+                        batch_size = calib_config.batch_size,
+                        image_size = calib_config.image_size,
+                        shuffle    = True,
+                        drop_last  = True,
+                        max_batch  = calib_config.max_batches
+                    )
+                )
+
+    for i in range(network.num_layers):
+        layer = network.get_layer(i)
+        layer.precision = precision_flag
+            
     # Optimization profile
     # profile   = builder.create_optimization_profile()
     # min_shape = [1]  + input_shape
@@ -85,30 +266,38 @@ def build_engine(onnx_path, engine_path) -> None:
     # profile.set_shape(inputs[0].name, min_shape, opt_shape, max_shape)
     # config.add_optimization_profile(profile)
 
-    # IO
-    # inputs[0].allowed_formats = 1 << int(trt.TensorFormat.CHW16)
-    # inputs[0].dtype  = trt.DataType.HALF
-    # inputs[0].dtype = trt.DataType.HALF
-
     if builder.is_network_supported(network, config):
-        print("[INFO]: Network is supported")
+        log.info("Network is supported")
     else:
-        print("[ERROR]: Network is not supported")
+        log.error("Network is not supported")
         return
 
     # Build engine
-    print(f"[INFO]: Building engine to {engine_path}")
+    log.info(f"Building engine to {engine_path}")
 
     engine_dir = os.path.dirname(engine_path)
     if not os.path.exists(engine_dir):
         os.makedirs(engine_dir)
 
     serialized_engine = builder.build_serialized_network(network, config)
+    if not serialized_engine:
+        log.error("Failed to build engine")
+        return
+
     with open(engine_path, "wb") as f:
         f.write(serialized_engine)
 
-    print(f"[INFO]: Built engine to {engine_path}")
+    log.info(f"Built engine to {engine_path}")
 
-    # Inspect engine
     inspect_engine(engine_path, TRT_LOGGER, input_shape)
     
+
+#===========================================================================================================================
+# Main (Used for testing this file)
+#
+if __name__ == "__main__":
+    """
+    Main function can be used for testing.
+    """
+    calibrator = EngineCalibrator(trt.CalibrationAlgoType.ENTROPY_CALIBRATION_2, "Calibration-Cache/timing.cache")
+    calibrator.display_internal()

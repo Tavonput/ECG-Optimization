@@ -116,18 +116,18 @@ def benchmark_model_trt(engine_path: str, dataloader: DataLoader, name: str) -> 
 
     @return ModelStats instance without param or macs set.
     """
-    print(f"[INFO]: Benchmarking TensorRT model {name} from {engine_path}")
+    print(f"[I]: Benchmarking TensorRT model {name} from {engine_path}")
 
-    print(f"[INFO]: \tEvaluating")
+    print(f"[I]: \tEvaluating")
     accuracy = evaluate_trt(engine_path, dataloader)
 
-    print(f"[INFO]: \tMeasuring latency")
+    print(f"[I]: \tMeasuring latency")
     latencies = []
     for _ in range(0, 10):
         latencies.append(measure_latency(engine_path, n_test=100))
     latency = sum(latencies) / len(latencies)
 
-    print(f"[INFO]: Benchmark for {name} finished")
+    print(f"[I]: Benchmark for {name} finished")
     return ModelStats(
         name     = name,
         accuracy = accuracy,

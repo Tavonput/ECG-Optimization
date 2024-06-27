@@ -30,7 +30,7 @@ def export_to_onnx(
     #     "output": {0: "batch_size"}
     # }
 
-    print(f"[INFO]: Exporting to ONNX")
+    print(f"[I]: Exporting to ONNX")
     torch.onnx.export(
         model, 
         dummy_input, 
@@ -43,4 +43,4 @@ def export_to_onnx(
         # dynamic_axes        = dynamic,
     )
 
-    print(f"[INFO]: Exported to {export_path}")
+    print(f"[I]: Exported to {export_path}")

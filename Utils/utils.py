@@ -131,7 +131,7 @@ def add_model_stat_to_json(path: str, data: ModelStats) -> None:
     @param path: Path to json file.
     @param data: ModelStats instance to add.
     """
-    print(f"[INFO]: Adding model stat to {path}")
+    print(f"[I]: Adding model stat to {path}")
     if not os.path.exists(path):
         with open(path, "w") as _:
             pass
@@ -147,12 +147,13 @@ def add_model_stat_to_json(path: str, data: ModelStats) -> None:
         json.dump(database, file, indent=4)
 
 
-def get_model_stats_from_json(path: str, model_names: list[str]) -> list[ModelStats]:
+def get_model_stats_from_json(path: str, model_names: list[str], sort: bool = False) -> list[ModelStats]:
     """
     Get a list of ModelStats instances from a json file by name searching.
 
     @param path: Path to json file.
     @param model_names: List of names corresponding to the ModelStats to retrieve.
+    @param sort: Whether or not to sort the results based on the model_names.
 
     @return List of ModelStats.
     """
@@ -170,7 +171,18 @@ def get_model_stats_from_json(path: str, model_names: list[str]) -> list[ModelSt
     # Get all model stats for the provided names
     model_stats = filter(lambda x: x["name"] in model_names, database)
     model_stats = map(lambda x: ModelStats(**x), model_stats)
-    return list(model_stats)
+    model_stats = list(model_stats)
+
+    if sort:
+        sorted_stats = []
+        for model in model_names:
+            for stat in model_stats:
+                if stat.name == model:
+                    sorted_stats.append(stat)
+                    break
+        model_stats = sorted_stats
+    
+    return model_stats
 
 
 def get_model_macs(model: nn.Module, inputs: torch.Tensor) -> int:
@@ -205,7 +217,7 @@ def measure_latency(
     model:       nn.Module, 
     dummy_input: torch.Tensor, 
     n_warmup:    int = 50, 
-    n_test:      int = 50,
+    n_test:      int = 100,
     test_device: str = "cpu",
 ) -> float:
     """
@@ -223,17 +235,18 @@ def measure_latency(
     """
     model.eval()
     model.to(test_device)
+    inp = dummy_input.to(test_device)
 
     # Warmup
     for _ in range(n_warmup):
-        _ = model(dummy_input.to(test_device))
+        _ = model(inp)
 
     # Real test
     times = []
     for _ in range(0, 10):
         t1 = time.time()
         for _ in range(n_test):
-            _ = model(dummy_input.to(test_device))
+            _ = model(inp)
         t2 = time.time()
         times.append((t2 - t1) / n_test)
     
@@ -258,34 +271,39 @@ def benchmark_dataloader(dataloader: DataLoader, num_batches: int = 100) -> floa
     return (end_time - start_time) / num_batches
 
 
-def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str) -> ModelStats:
+def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str, no_latency: bool = False) -> ModelStats:
     """
     Benchmark a model for accuracy, latency, parameter count, and MACs.
 
     @param model: Model to benchmark.
     @param dataloader: Testing dataloader.
     @param name: Name to be attached with the results.
+    @param no_latency: Whether or not to skip latency profile.
 
     @return ModelStats instance.
     """
-    print(f"[INFO]: Benchmarking model {name}")
+    print(f"[I]: Benchmarking model {name}")
     model.eval()
     model.to("cpu")
 
     dummy_input = next(iter(dataloader))[0][0].unsqueeze(0)
 
-    print(f"[INFO]: \tGetting model params and MACs")
+    print(f"[I]: \tGetting model params and MACs")
     macs    = get_model_macs(deepcopy(model).to(torch.float32), dummy_input.clone().to(torch.float32))
     params  = get_num_parameters(model)
 
-    print(f"[INFO]: \tMeasuring latency")
-    latency = measure_latency(model, dummy_input)
+    if no_latency:
+        print(f"[I]: \tLatency measurement skipped")
+        latency = 0
+    else:
+        print(f"[I]: \tMeasuring latency")
+        latency = measure_latency(model, dummy_input)
 
-    print(f"[INFO]: \tEvaluating")
+    print(f"[I]: \tEvaluating")
     model.to(device)
     accuracy = evaluate(model, dataloader)
 
-    print(f"[INFO]: Benchmarking for {name} finished")
+    print(f"[I]: Benchmarking for {name} finished")
     return ModelStats(
         macs     = macs, 
         params   = params, 
@@ -293,6 +311,46 @@ def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str) -> Mode
         accuracy = accuracy, 
         name     = name
     )
+
+
+def get_dataset_size(image_size: int, channels: int, num_images: int, data_width: int) -> float:
+    """
+    Get the size of a dataset in GiB. Images must be square.
+
+    @param image_size: Image resolution.
+    @param channels: Number of channels.
+    @param num_images: Number of images.
+    @param data_width: Bit size of each value.
+
+    @return Dataset size in GiB.
+    """
+    pixels = image_size * image_size * channels
+    bits   = pixels * data_width
+    return (bits / GiB) * num_images
+
+
+# ************************************************************************************************************************
+# Display and Plotting
+#
+# TODO: Currently in the process of refactoring. Some function need to use the PlotConfig struct. Use subplot ax instead
+#       of plt.
+#
+@dataclass
+class PlotConfig:
+    title:   str = "Title"
+    x_label: str = "x-axis"
+    y_label: str = "y-axis"
+
+    x_range: tuple = None
+    y_range: tuple = None
+
+    x_scale: str = "linear"
+    y_scale: str = "linear"
+
+    x_grid: bool = True
+    y_grid: bool = True
+
+    fig_size: tuple = (10, 4)
 
 
 def compare_models(
@@ -360,54 +418,69 @@ def display_model_stats(model_stats: ModelStats) -> None:
     print(f"MACs:     {round(model_stats.macs / 1e6)} M")
 
 
-def get_dataset_size(image_size: int, channels: int, num_images: int, data_width: int) -> float:
-    """
-    Get the size of a dataset in GiB. Images must be square.
-
-    @param image_size: Image resolution.
-    @param channels: Number of channels.
-    @param num_images: Number of images.
-    @param data_width: Bit size of each value.
-
-    @return Dataset size in GiB.
-    """
-    pixels = image_size * image_size * channels
-    bits   = pixels * data_width
-    return (bits / GiB) * num_images
-
-
 def compare_single_values(
-    values: list[float], 
-    labels: list[str], 
-    axis:   str = None, 
-    title:  str = None
+    values:     dict[str, float | int],
+    config:     PlotConfig,
+    horizontal: bool = True,
 ) -> None:
     """
     Compare a list of single values through a bar graph.
 
-    @param values: Values to compare.
-    @param labels: Labels for each value.
-    @param axis: Label of value axis.
-    @param title: Title of plot.
+    @param values: Dictionary of {names : values}.
+    @param config: PlotConfig.
+    @param horizontal: Whether or not to have a horizontal plot.
     """
     sns.set_style("whitegrid")
     colors = sns.color_palette("husl", len(values))
 
-    plt.barh(labels[::-1], values[::-1], color=colors)
+    labels = list(values.keys())
+    values = list(values.values())
 
-    if axis: 
-        plt.xlabel(axis)
-    if title:
-        plt.title(title)
+    _, ax = plt.subplots(figsize=config.fig_size)
+
+    if horizontal:
+        bars = ax.barh(labels[::-1], values[::-1], color=colors)
+        ax.set_xlabel(config.x_label)
+        ax.set_xscale(config.x_scale)
+        ax.set_xlim(config.x_range)
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(
+                f"{height}", 
+                xy = (bar.get_y() + bar.get_width() / 2, height),
+                xytext = (3, 0),
+                textcoords = "offset points",
+                ha = "center", va = "bottom", 
+            )
+    else:
+        bars = ax.bar(labels, values, color=colors)
+        ax.set_ylabel(config.y_label)
+        ax.set_yscale(config.y_scale)
+        ax.set_ylim(config.y_range)
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(
+                f"{height}", 
+                xy = (bar.get_x() + bar.get_width() / 2, height),
+                xytext = (0, 3),
+                textcoords = "offset points",
+                ha = "center", va = "bottom", 
+            )
+
+    ax.set_title(config.title)
+    ax.grid(config.x_grid, axis="x")
+    ax.grid(config.y_grid, axis="y")
 
     plt.show()
 
 
 def compare_list_values(
     values:  dict[str, list],
-    x_axis:  str = None,
-    y_axis:  str = None,
-    title:   str = None,
+    x_axis:  str   = None,
+    y_axis:  str   = None,
+    title:   str   = None,
     y_range: tuple = None
 ) -> None:
     """
@@ -435,4 +508,34 @@ def compare_list_values(
         plt.title(title)
         
     plt.legend()
+    plt.show()
+
+
+def compare_pairwise(
+    values: dict[str, list[tuple]],
+    config: PlotConfig
+) -> None:
+    """
+    Normal pairwise (x, y) plot.
+
+    @param values: Dictionary containing labels and points {name : list of (x, y)}.
+    @param config: PlotConfig.
+    """
+    sns.set_style("whitegrid")
+    sns.set_palette("husl")
+    _, ax = plt.subplots(figsize=config.fig_size)
+
+    for k, v in values.items():
+        xs, ys = zip(*v)
+        ax.plot(xs, ys, "o-", label=k)
+
+    if config.y_range:
+        ax.set_ylim(config.y_range[0], config.y_range[1])    
+    if config.x_range:
+        ax.set_ylim(config.x_range[0], config.x_range[1])   
+
+    ax.set_xlabel(config.x_label)
+    ax.set_ylabel(config.y_label)
+    ax.set_title(config.title)
+    ax.legend()
     plt.show()
