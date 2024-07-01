@@ -36,7 +36,7 @@ def export_to_onnx(
         dummy_input, 
         export_path,
         opset_version       = 17,
-        verbose             = True,
+        verbose             = False,
         input_names         = ["input"],
         output_names        = ["output"],
         do_constant_folding = True,

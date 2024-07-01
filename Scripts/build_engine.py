@@ -1,4 +1,6 @@
 import argparse
+import sys
+sys.path.append("../")
 
 from Quantization.build_engine import build_engine, CalibrationConfig
 
