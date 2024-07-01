@@ -144,15 +144,100 @@ class CalibrationConfig:
     image_size:  int
     batch_size:  int
     max_batches: int
+    algorithm:   str
 
 
-def inspect_engine(engine_path: str, logger: trt.Logger, input_shape: tuple) -> None:
+def _parse_onnx(network, logger, onnx_path) -> None:
+    """
+    Helper for parsing the ONNX model.
+
+    @param network: The TensorRT network that the ONNX model will be loaded into.
+    @param logger: The TensorRT logger.
+    @param onnx_path: The path to the ONNX model.
+    """
+    parser = trt.OnnxParser(network, logger)
+
+    log.info(f"Parsing ONNX model {onnx_path}")
+    with open(onnx_path, "rb") as onnx_model:
+        if not parser.parse(onnx_model.read()):
+            for i in range(parser.num_errors):
+                log.error(parser.get_error(i))
+    log.info(f"Parsing complete")
+
+    inputs  = [network.get_input(i) for i in range(network.num_inputs)]
+    outputs = [network.get_output(i) for i in range(network.num_outputs)]
+
+    log.info("Network description...")
+    for input in inputs:
+        log.info(f"Name: {input.name} - Type: {input.dtype} - Shape: {input.shape}")
+    for output in outputs:
+        log.info(f"Name: {output.name} - Type: {output.dtype} - Shape: {output.shape}")
+
+
+def _set_precision(builder, config, network, precision, calib_config: CalibrationConfig = None) -> None:
+    """
+    Helper for setting the precision implicitly.
+
+    @param builder: The TensorRT builder.
+    @param config: The TensorRT config for setting the precision.
+    @param network: The TensorRT Network. It should already be filled out by the ONNX parser.
+    @param precision: The precision to reduce to.
+    @param calib_config: The CalibrationConfig for INT8.
+    """
+    config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+
+    precision_flag = trt.DataType.FLOAT
+    if precision == "fp16":
+        if not builder.platform_has_fast_fp16:
+            log.warning(f"Platform does not support FP16. Falling back to FP32")
+        else:
+            log.info("Using FP16")
+            precision_flag = trt.DataType.HALF
+            config.set_flag(trt.BuilderFlag.FP16)
+            
+    elif precision == "int8":
+        if not builder.platform_has_fast_int8:
+            log.warning(f"Platform does not support INT8. Falling back to FP32")
+        else:
+            log.info("Using INT8")
+            precision_flag = trt.DataType.INT8
+            config.set_flag(trt.BuilderFlag.INT8)
+
+            if calib_config.algorithm == "entropy":
+                calib_algorithm = trt.CalibrationAlgoType.ENTROPY_CALIBRATION_2
+            elif calib_config.algorithm == "max":
+                calib_algorithm = trt.CalibrationAlgoType.MINMAX_CALIBRATION
+
+            config.int8_calibrator = EngineCalibrator(calib_algorithm, calib_config.cache)
+
+            if not calib_config:
+                log.error(f"INT8 wanted but no calibration config was given")
+
+            if not os.path.exists(calib_config.cache):
+                log.info("No calibration cache detected. Building image batcher for calibration")
+                config.int8_calibrator.set_image_batcher(
+                    ImageBatcher(
+                        file_path  = calib_config.dataset,
+                        batch_size = calib_config.batch_size,
+                        image_size = calib_config.image_size,
+                        shuffle    = True,
+                        drop_last  = True,
+                        max_batch  = calib_config.max_batches
+                    )
+                )
+    
+    # Manually set layers to the requested precision
+    for i in range(network.num_layers):
+        layer = network.get_layer(i)
+        layer.precision = precision_flag
+
+
+def _inspect_engine(engine_path: str, logger: trt.Logger) -> None:
     """
     Log detailed engine description with an inspector. Saves everything to engine_inspector_log.txt.
 
     @param engine_path: Path to TensorRT engine.
     @param logger: TensorRT logger.
-    @param input_shape: Input shape.
     """
     runtime = trt.Runtime(logger)
     assert runtime
@@ -184,6 +269,8 @@ def build_engine(
 
     @param onnx_path: Path to ONNX model.
     @param engine_path: Path to save the engine.
+    @param precision: Model precision.
+    @param calib_config: CalibrationConfig.
 
     TODO: 
     - Get dynamic batching to work. 
@@ -192,70 +279,19 @@ def build_engine(
     TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
     builder = trt.Builder(TRT_LOGGER)
-    network = builder.create_network()
-    parser  = trt.OnnxParser(network, TRT_LOGGER)
-
-    # Parse ONNX
-    log.info(f"Parsing ONNX model {onnx_path}")
-    with open(onnx_path, "rb") as onnx_model:
-        if not parser.parse(onnx_model.read()):
-            for i in range(parser.num_errors):
-                log.error(parser.get_error(i))
-    log.info(f"Parsing complete")
-
-    inputs = [network.get_input(i) for i in range(network.num_inputs)]
-    outputs = [network.get_output(i) for i in range(network.num_outputs)]
-
-    log.info("Network description...")
-    for input in inputs:
-        log.info(f"Name: {input.name} - Type: {input.dtype} - Shape: {input.shape}")
-    for output in outputs:
-        log.info(f"Name: {output.name} - Type: {output.dtype} - Shape: {output.shape}")
-    
-    input_shape = inputs[0].shape[1:]
-
-    # Config
-    config = builder.create_builder_config()
+    config  = builder.create_builder_config()
     config.profiling_verbosity= trt.ProfilingVerbosity.DETAILED
-    config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
 
-    precision_flag = trt.DataType.FLOAT
-    if precision == "fp16":
-        if not builder.platform_has_fast_fp16:
-            log.warning(f"Platform does not support FP16. Falling back to FP32")
-        else:
-            log.info("Using FP16")
-            precision_flag = trt.DataType.HALF
-            config.set_flag(trt.BuilderFlag.FP16)
-            
-    elif precision == "int8":
-        if not builder.platform_has_fast_int8:
-            log.warning(f"Platform does not support INT8. Falling back to FP32")
-        else:
-            log.info("Using INT8")
-            precision_flag = trt.DataType.INT8
-            config.set_flag(trt.BuilderFlag.INT8)
-            config.int8_calibrator = EngineCalibrator(trt.CalibrationAlgoType.ENTROPY_CALIBRATION_2, calib_config.cache)
+    if precision == "explicit":
+        log.info("Detected explicit precision")
+        network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.STRONGLY_TYPED))
+    else:
+        network = builder.create_network()
 
-            if not calib_config:
-                log.error(f"INT8 wanted but no calibration config was given")
+    _parse_onnx(network, TRT_LOGGER, onnx_path)
 
-            if not os.path.exists(calib_config.cache):
-                log.info("No calibration cache detected. Building image batcher for calibration")
-                config.int8_calibrator.set_image_batcher(
-                    ImageBatcher(
-                        file_path  = calib_config.dataset,
-                        batch_size = calib_config.batch_size,
-                        image_size = calib_config.image_size,
-                        shuffle    = True,
-                        drop_last  = True,
-                        max_batch  = calib_config.max_batches
-                    )
-                )
-
-    for i in range(network.num_layers):
-        layer = network.get_layer(i)
-        layer.precision = precision_flag
+    if precision != "explicit":
+        _set_precision(builder, config, network, precision, calib_config)
             
     # Optimization profile
     # profile   = builder.create_optimization_profile()
@@ -289,7 +325,7 @@ def build_engine(
 
     log.info(f"Built engine to {engine_path}")
 
-    inspect_engine(engine_path, TRT_LOGGER, input_shape)
+    _inspect_engine(engine_path, TRT_LOGGER)
     
 
 #===========================================================================================================================

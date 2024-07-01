@@ -21,8 +21,8 @@ def parse_args():
         "--precision",
         type    = str,
         default = "fp16",
-        choices = ["fp32", "fp16", "int8"],
-        help    = " Model precision: 'fp32', 'fp16', or 'int8'"
+        choices = ["fp32", "fp16", "int8", "explicit"],
+        help    = " Model precision: 'fp32', 'fp16', 'int8', or 'explicit'"
     )
     parser.add_argument(
         "--calib_path",
@@ -54,6 +54,13 @@ def parse_args():
         default = 152,
         help    = "Image size for calibration",
     )
+    parser.add_argument(
+        "--calib_algorithm",
+        type    = str,
+        default = "entropy",
+        choices = ["entropy", "max"],
+        help    = "Algorithm for calibration, either 'entropy' or 'max'"
+    )
 
     args = parser.parse_args()
 
@@ -80,7 +87,8 @@ def main():
             cache       = args.calib_cache,
             image_size  = args.calib_image_size,
             batch_size  = args.calib_batch_size,
-            max_batches = args.calib_max_batch
+            max_batches = args.calib_max_batch,
+            algorithm   = args.calib_algorithm
         )
     else:
         calib = None

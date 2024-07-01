@@ -266,17 +266,17 @@
         "accuracy": 98.62506103515625
     },
     {
-        "name": "VGG16 Custom 152 - Layer Pruned 0.8 - TRT INT8",
-        "macs": 283761458.0,
-        "params": 2598860,
-        "latency": 0.00022530455589294434,
-        "accuracy": 95.54631828978623
-    },
-    {
         "name": "VGG16 Custom 152 - Layer Pruned 0.8 - TRT FP16",
         "macs": 283761458.0,
         "params": 2598860,
         "latency": 0.00024081864356994626,
         "accuracy": 98.25507034533163
+    },
+    {
+        "name": "VGG16 Custom 152 - Layer Pruned 0.8 - TRT INT8",
+        "macs": 283761458.0,
+        "params": 2598860,
+        "latency": 0.00022530455589294434,
+        "accuracy": 98.23223095194592
     }
 ]

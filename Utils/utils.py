@@ -1,6 +1,8 @@
 import time
 import json
 import os
+import copy
+import logging
 from copy import deepcopy
 from dataclasses import dataclass, asdict
 
@@ -16,6 +18,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
+
+
+LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FORMAT)
+logging.getLogger("UTL").setLevel(logging.INFO)
+log = logging.getLogger("UTL")
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -87,6 +96,73 @@ def evaluate(
         num_correct += (outputs == labels).sum()
     
     return (num_correct / num_samples * 100).item()
+
+
+def finetune(
+    model:      nn.Module,
+    epochs:     int,
+    dataloader: dict[str, DataLoader],
+    save_path:  str,
+    lr:         float = 0.01,
+    safety:     int   = 0,
+    safety_dir: str   = None,
+) -> None:
+    """
+    Basic finetune implementation.
+
+    @param model: Model to finetune.
+    @param epochs: Number of epochs to finetune.
+    @param dataloader: Both train and test loaders in dict {name, DataLoader}.
+    @param save_path: Where to save the model. 
+    @param lr: Initial learning rate for SGD.
+    @param safety: Epoch interval to save a checkpoint.
+    @param safety_dir: Save directory for safety checkpoints.
+    """
+    if safety != 0 and not safety_dir:
+        log.error("No safety directory specified")
+        return
+    
+    if safety != 0 and not os.path.exists(safety_dir):
+        os.makedirs(safety_dir)
+
+    save_dir = os.path.dirname(save_path)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    model.to(device)
+    optimizer = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+    scheduler = CosineAnnealingLR(optimizer, epochs)
+    criterion = nn.CrossEntropyLoss()
+
+    best_model_checkpoint = dict()
+    best_accuracy = 0
+
+    log.info("Begin finetuning...")
+    for epoch in range(epochs):
+        train(model, dataloader["train"], criterion, optimizer, scheduler)
+        accuracy = evaluate(model, dataloader["test"])
+
+        if accuracy > best_accuracy:
+            best_model_checkpoint["state_dict"] = copy.deepcopy(model.state_dict())
+            best_accuracy = accuracy
+
+        # Checkpoint safety        
+        if safety != 0 and (epoch + 1) % safety == 0:
+            checkpoint = {
+                "model_state_dict":     model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "epoch":                epoch,
+            }
+            torch.save(checkpoint, f"{safety_dir}/check_{epoch+1}.pth")
+            log.info(f"\tSaved epoch {epoch+1} to {safety_dir}/check_{epoch+1}.pth")
+        
+        log.info(f"\tEpoch {epoch+1} Accuracy {accuracy:.2f}% / Best Accuracy: {best_accuracy:.2f}%")
+
+    log.info("Finetuning completed")
+
+    torch.save(best_model_checkpoint["state_dict"], save_path)
+    log.info(f"Model saved to {save_path}")
 
 
 def warm_up_dataloader(dataloader, num_batches: int = 0) -> None:
