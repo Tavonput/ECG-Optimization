@@ -7,6 +7,7 @@ tqdm
 torch
 torchvision
 torch_pruning
+pytorch_quantization
 thop
 
 tensorrt
@@ -16,4 +17,6 @@ opencv_python
 scikit-learn
 imbalance-learn
 pyts
+
 wfbd
+h5py
