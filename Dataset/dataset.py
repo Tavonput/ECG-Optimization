@@ -12,22 +12,6 @@ import matplotlib.pyplot as plt
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class ArrhythmiaLabels:
-    """
-    @class Arrhythmia Labels
-
-    Access to the labels and size of the MIT-BIH dataset.
-    """
-    labels = {
-        0: "N",
-        1: "S",
-        2: "V",
-        3: "F",
-        4: "Q",
-    }
-    size = 5
-
-
 class EcgDataset(Dataset):
     """
     @class ECG Dataset
@@ -154,3 +138,21 @@ def visualize_ecg_data(dataloader: DataLoader) -> None:
         ax[i].imshow(channel.squeeze(0).numpy(), cmap="gray")
         ax[i].axis("off")
     plt.show()
+
+
+def examine_dataset(dataset_path: str) -> dict[str, int]:
+    """
+    Examine the keys in a hdf5 file.
+
+    @param dataset_path: Path to hdf5 file.
+    
+    @return Dataset information in the form of a dictionary.
+    """
+    data = dict()
+    with h5py.File(dataset_path, "r") as hdf:
+        for key in hdf.keys():
+            data[f"{key}_size"] = len(hdf[key])
+            data[f"{key}_shape"] = hdf[key].shape
+            data[f"{key}_dtype"] = hdf[key].dtype
+            
+    return data

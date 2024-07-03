@@ -16,6 +16,9 @@ logging.getLogger("DTGEN").setLevel(logging.INFO)
 log = logging.getLogger("DTGEN")
 
 
+#===========================================================================================================================
+# Useful Stuff for Navigating the Dataset
+#
 class ArrhythmiaLabels:
     """
     Constants and label conversions related to the arrhythmia database.
@@ -53,7 +56,10 @@ class ArrhythmiaLabels:
         "unknown": 4
     }
 
-    
+
+#===========================================================================================================================
+# Data Generation from Raw MIT BIH Database
+#
 def segment_heartbeat(signal: np.ndarray, peak: int, window_size: int) -> np.ndarray | None:
     """
     Segment a heartbeat. The length of the segment will be 2 x window_size.
@@ -117,24 +123,6 @@ def get_class_distribution(labels: list) -> dict[str, int]:
         counts[label] = np.sum(labels == i)
 
     return counts
-
-
-def examine_dataset(dataset_path: str) -> dict[str, int]:
-    """
-    Examine the keys in a hdf5 file.
-
-    @param dataset_path: Path to hdf5 file.
-    
-    @return Dataset information in the form of a dictionary.
-    """
-    data = dict()
-    with h5py.File(dataset_path, "r") as hdf:
-        for key in hdf.keys():
-            data[f"{key}_size"] = len(hdf[key])
-            data[f"{key}_shape"] = hdf[key].shape
-            data[f"{key}_dtype"] = hdf[key].dtype
-            
-    return data
 
 
 def create_raw_dataset(data_path: str, output_path: str, window_size: int) -> None:

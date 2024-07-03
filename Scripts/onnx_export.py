@@ -5,7 +5,7 @@ sys.path.append("../")
 import torch
 from Quantization.export import export_to_onnx
 from Utils.model_loading import load_model_from_pretrained, load_vgg_custom_from_pruned
-from Utils.dataset import ArrhythmiaLabels
+from Dataset.data_generation import ArrhythmiaLabels
 
 def parse_args():
     parser = argparse.ArgumentParser()
