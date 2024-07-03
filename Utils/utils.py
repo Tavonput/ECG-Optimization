@@ -29,7 +29,7 @@ log = logging.getLogger("UTL")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-# ************************************************************************************************************************
+#===========================================================================================================================
 # Training And Eval
 #
 def train(
@@ -183,7 +183,7 @@ def warm_up_dataloader(dataloader, num_batches: int = 0) -> None:
             i += 1
 
 
-# ************************************************************************************************************************
+#===========================================================================================================================
 # Benchmarking
 #
 Byte = 8
@@ -405,7 +405,7 @@ def get_dataset_size(image_size: int, channels: int, num_images: int, data_width
     return (bits / GiB) * num_images
 
 
-# ************************************************************************************************************************
+#===========================================================================================================================
 # Display and Plotting
 #
 # TODO: Currently in the process of refactoring. Some function need to use the PlotConfig struct. Use subplot ax instead
@@ -614,4 +614,20 @@ def compare_pairwise(
     ax.set_ylabel(config.y_label)
     ax.set_title(config.title)
     ax.legend()
+    plt.show()
+
+
+def visualize_image_from_numpy(image: np.ndarray, transpose: bool = False) -> None:
+    """
+    Simple visualization for an image from a numpy array.
+
+    @param image: The image in the form of a numpy array.
+    @param transpose: Change image from (c, h, w) to (h, w, c).
+    """
+    if transpose:
+        image = image.transpose(1, 2, 0)
+
+    _, ax = plt.subplots()
+    ax.imshow(image)
+
     plt.show()

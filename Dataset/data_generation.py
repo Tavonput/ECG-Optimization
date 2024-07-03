@@ -58,17 +58,25 @@ class ArrhythmiaLabels:
 
 
 #===========================================================================================================================
-# Data Generation from Raw MIT BIH Database
+# Data Generation Helpers
 #
 def segment_heartbeat(signal: np.ndarray, peak: int, window_size: int) -> np.ndarray | None:
     """
     Segment a heartbeat. The length of the segment will be 2 x window_size.
 
-    @param signal: The ECG signal.
-    @param peak: The r-peak of the heartbeat.
-    @param window_size: The window size.
+    Parameters
+    ----------
+    signal : np.ndarray
+        The ECG signal.
+    peak : int
+        The r-peak of the heartbeat.
+    window_size : int
+        The window size.
 
-    @return The heartbeat segment or None if the segment is outside of the ECG signal.
+    Returns
+    -------
+    segment : np.ndarray | None
+        The heartbeat segment or None if the segment is outside of the ECG signal.
     """
     start_idx = peak - window_size
     end_idx   = peak + window_size
@@ -83,10 +91,17 @@ def process_record(record_path: str, window_size: int) -> tuple[list, list]:
     """
     Process a record given a window size.
 
-    @param record_path: Path to the record.
-    @param window_size: The window size (total size).
+    Parameters
+    ----------
+    record_path : str
+        Path to the record.
+    window_size : int
+        The window size (total size).
 
-    @return Array of heartbeat segments and an array of labels.
+    Returns
+    -------
+    segments : list, list
+        Array of heartbeat segments and an array of labels.
     """
     record     = wfdb.rdrecord(record_path)
     annotation = wfdb.rdann(record_path, "atr")
@@ -110,28 +125,132 @@ def process_record(record_path: str, window_size: int) -> tuple[list, list]:
     return np.array(heartbeats), np.array(labels_idx)
 
 
-def get_class_distribution(labels: list) -> dict[str, int]:
+def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, int | float]:
     """
     Get the class distribution of a list of labels.
 
-    @param labels: List of labels.
+    Parameters
+    ----------
+    labels : list
+        List of labels.
+    normalize : bool
+        Whether or not to normalize the distribution.
 
-    @return Class distribution in the form of a dictionary (class name : count).
+    Returns
+    -------
+    distribution : dict {str : int | float}
+        Class distribution in the form of a dictionary (class name : count/ratio).
     """
+    num_labels = len(labels)
+
     counts = dict()
     for i, label in enumerate(ArrhythmiaLabels.classes):
         counts[label] = np.sum(labels == i)
 
+        if normalize:
+            counts[label] /= num_labels
+        
     return counts
 
 
+def batch_value(value: int, batch_size: int) -> list[int]:
+    """
+    Calculate batching. For example if value is 33 and the batch size is 10, the corresponding batching will be [10, 10, 10, 3].
+
+    Parameters
+    ----------
+    value : int
+        Number of samples to batch.
+    batch_size : int
+        The batch_size.
+
+    Returns
+    -------
+    batches : list[int]
+        Batching list.
+    """
+    full_batches = [batch_size] * (value // batch_size)
+    remainder    = value % batch_size
+
+    if remainder != 0:
+        full_batches += [remainder]
+        
+    return full_batches
+
+
+def signal_to_image(signals: np.ndarray) -> np.ndarray:
+    """
+    Transform signals into images. Signals should be of shape (num_samples, image_size).
+
+    Parameters
+    ----------
+    signals : np.ndarray
+        The 1D signals to transform.
+
+    Returns
+    -------
+    images : np.ndarray
+        The transformed images of shape (num_samples, 3, image_size, image_size).
+    """
+    gaf = GramianAngularField(method="summation")
+    gaf_image = gaf.fit_transform(signals)
+
+    rp = RecurrencePlot(threshold="point")
+    rp_image = rp.fit_transform(signals)
+    
+    mtf = MarkovTransitionField()
+    mtf_image = mtf.fit_transform(signals)
+
+    images = np.stack((gaf_image, rp_image, mtf_image), axis=0) # (3, batch_size, width, height)
+    return images.transpose(1, 0, 2, 3) # (batch_size, 3, width, height)
+
+
+def split_value(value: int, ratio: float, shuffle: bool) -> tuple[list[int], list[int]]:
+    """
+    Split a value by a ratio into indices. For example, a value of 5 with a ratio of 0.6 will results in two lists:
+    [0, 1, 2] and [3, 4].
+
+    Parameters
+    ----------
+    value : int
+        The value to split into indices.
+    ratio : float
+        The split ratio.
+    shuffle : bool
+        Whether or not to shuffle the indices before the split.
+
+    Returns
+    -------
+    indices : list[int], list[int]
+        Two indices lists.
+    """
+    indices = np.arange(value)
+
+    if shuffle:
+        np.random.shuffle(indices)
+
+    split_idx   = int(value * ratio)
+    train_split = indices[:split_idx]
+    test_split  = indices[split_idx:]
+
+    return train_split, test_split
+
+
+#===========================================================================================================================
+# Dataset Creation
+#
 def create_raw_dataset(data_path: str, output_path: str, window_size: int) -> None:
     """
     Create a hdf5 dataset from MIT-BIH.
 
-    @param data_path: Path to MIT-BIH database.
-    @param output_path: Path to output hdf5 dataset.
-    @param window_size: Window size for heartbeat segments.
+    Parameters
+    ----------
+    data_path : str
+        Path to MIT-BIH database.
+    output_path : str
+        Path to output hdf5 dataset.
+    window_size : int 
+        Window size for heartbeat segments.
     """
     output_dir = os.path.dirname(output_path)
     if not os.path.exists(output_dir):
@@ -153,7 +272,6 @@ def create_raw_dataset(data_path: str, output_path: str, window_size: int) -> No
             chunks   = (1,), 
             dtype    = int
         )
-
 
     log.info(f"Processing all records")
     current_idx = 0
@@ -191,53 +309,19 @@ def create_raw_dataset(data_path: str, output_path: str, window_size: int) -> No
     log.info(f"All records have been processed and stored in {output_path}. Total time: {(total_end_time - total_start_time):.4f}s")
 
 
-def batch_value(value: int, batch_size: int) -> list[int]:
-    """
-    Calculate batching. For example if value is 33 and the batch size is 10, the corresponding batching will be [10, 10, 10, 3].
-
-    @param value: Number of samples to batch.
-    @param batch_size: The batch_size.
-
-    @return Batching list.
-    """
-    full_batches = [batch_size] * (value // batch_size)
-    remainder    = value % batch_size
-
-    if remainder != 0:
-        full_batches += [remainder]
-        
-    return full_batches
-
-
-def signal_to_image(signals: np.ndarray) -> np.ndarray:
-    """
-    Transform signals into images. Signals should be of shape (num_samples, image_size).
-
-    @param signals: The 1D signals to transform.
-
-    @return The transformed images of shape (num_samples, 3, image_size, image_size).
-    """
-    gaf = GramianAngularField(method="summation")
-    gaf_image = gaf.fit_transform(signals)
-
-    rp = RecurrencePlot(threshold="point")
-    rp_image = rp.fit_transform(signals)
-    
-    mtf = MarkovTransitionField()
-    mtf_image = mtf.fit_transform(signals)
-
-    images = np.stack((gaf_image, rp_image, mtf_image), axis=0) # (3, batch_size, width, height)
-    return images.transpose(1, 0, 2, 3) # (batch_size, 3, width, height)
-
-
 def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size: int) -> None:
     """
     Create an image dataset from a previous dataset of 1D signal data. Images are processed in batches, thus make sure you tune this parameter
     such that you do not run out of memory.
 
-    @param signal_dataset_path: Path to hdf5 file containing 1D heartbeat segments.
-    @param output_path: Path of output hdf5 file.
-    @param batch_size: Number of samples to process at a time. 
+    Parameters
+    ----------
+    signal_dataset_path : str
+        Path to hdf5 file containing 1D heartbeat segments.
+    output_path : str 
+        Path of output hdf5 file.
+    batch_size : int
+        Number of samples to process at a time. 
     """
     if not os.path.exists(signal_dataset_path):
         log.error(f"{signal_dataset_path} does not exist")
@@ -284,7 +368,7 @@ def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size:
 
     log.info("Transforming signals into images")
     for i, batch in enumerate(batches):
-        log.info(f"\tProcessing batch {i + 1} / {len(batches) + 1}")
+        log.info(f"\tProcessing batch {i + 1} / {len(batches)}")
         start_time = time.time()
 
         batch_images = signal_to_image(segments[current_idx : (current_idx + batch)])
@@ -305,3 +389,135 @@ def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size:
     log.info(f"Image transformation complete. Total time: {(total_end_time - total_start_time):4f}s")
 
     signal_dataset.close()
+
+
+def create_train_test_from_dataset(
+    dataset_path: str, 
+    output_name:  str, 
+    ratio:        float, 
+    data_key:     str, 
+    shuffle:      bool, 
+    batch_size:   int
+) -> None:
+    """
+    Create train and test datasets from a base dataset. This will result in two new hdf5 files.
+
+    Parameters
+    ----------
+    dataset_path : str
+        The path to the base hdf5 dataset to split.
+    output_name : str
+        The output file name for the split datasets. Do not include the extension. '_train' and '_test' will be appended
+        to the end of the respective files.
+    ratio : float
+        The train-test split ratio.
+    data_key : str
+        The key of the main data stored in the original hdf5 dataset.
+    shuffle : bool
+        Whether or not to shuffle the dataset before splitting.
+    batch_size : int
+        The maximum batch size to use when processing the split datasets.
+    """
+    if not os.path.exists(dataset_path):
+        log.error(f"{dataset_path} does not exist")
+        return
+    dataset_dir = os.path.dirname(dataset_path)
+    
+    original_dataset = h5py.File(dataset_path, "r")
+    original_data    = original_dataset[data_key]
+    original_labels  = original_dataset["labels"]
+
+    original_data_shape = list(original_data.shape[1:])
+
+    num_samples = original_data.shape[0]
+    train_indices, test_indices = split_value(num_samples, ratio, shuffle)
+
+    log.info(f"Generating split datasets")
+    log.info(f"\tShuffle: {shuffle}")
+    log.info(f"\tTotal:   {num_samples}")
+    log.info(f"\tTrain:   {len(train_indices)} ({(len(train_indices) / num_samples * 100):.2f}%)")
+    log.info(f"\tTest:    {len(test_indices)} ({(len(test_indices) / num_samples * 100):.2f}%)")
+
+    splits = {
+        "train": train_indices,
+        "test":  test_indices
+    }
+    for split, indices in splits.items():
+        log.info(f"Processing split - {split}")
+        split_path = f"{dataset_dir}/{output_name}_{split}.h5"
+        start_split_time = time.time()
+
+        # Initialize dataset file
+        log.info("\tInitializing dataset")
+        with h5py.File(split_path, "w") as hdf:
+            hdf.create_dataset(
+                data_key, 
+                shape    = tuple([0]    + original_data_shape), 
+                maxshape = tuple([None] + original_data_shape), 
+                chunks   = tuple([1]    + original_data_shape), 
+                dtype    = original_data.dtype
+            )
+            hdf.create_dataset(
+                "labels", 
+                shape    = (0,), 
+                maxshape = (None,), 
+                chunks   = (1,), 
+                dtype    = original_labels.dtype
+            )
+        
+        # Copy over data
+        log.info("\tCollecting data from original dataset")
+        batches     = batch_value(len(indices), batch_size)
+        current_idx = 0
+
+        with h5py.File(split_path, "a") as hdf:
+            split_data   = hdf[data_key]
+            split_labels = hdf["labels"]
+
+            for i, batch in enumerate(batches):
+                log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
+                batch_indices = indices[current_idx : (current_idx + batch)]
+
+                batch_data   = []
+                batch_labels = []
+                for i in batch_indices:
+                    batch_data.append(original_data[i])
+                    batch_labels.append(original_labels[i])
+                
+                batch_data   = np.stack(batch_data, axis=0)
+                batch_labels = np.stack(batch_labels, axis=0)
+
+                # Store data
+                split_data.resize(split_data.shape[0] + batch, axis=0)
+                split_data[current_idx : (current_idx + batch)] = batch_data
+
+                split_labels.resize(split_labels.shape[0] + batch, axis=0)
+                split_labels[current_idx : (current_idx + batch)] = batch_labels
+
+                current_idx += batch
+
+        end_split_time = time.time()
+        log.info(f"Finished processing {split} split in {(end_split_time - start_split_time):.4f}s : Stored in {split_path}")
+
+    log.info(f"Finished generating dataset splits")
+
+    original_dataset.close()
+
+
+#===========================================================================================================================
+# Main (Used for testing this file)
+#
+if __name__ == "__main__":
+    """
+    Main used for testing.
+    """
+
+    create_train_test_from_dataset(
+        dataset_path = "../Data/MIT-BIH-Raw/image_unfiltered_i128.h5",
+        output_name  = "image_unfiltered_i128",
+        ratio        = 0.8,
+        data_key     = "images",
+        shuffle      = True,
+        batch_size   = 5000
+    )
+    

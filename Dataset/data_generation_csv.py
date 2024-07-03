@@ -31,7 +31,8 @@ def visualize_raw_ecg(data: dict[str, pd.DataFrame]) -> None:
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     sns.set_style("whitegrid")
     sns.set_palette("husl")
@@ -60,7 +61,10 @@ def visualize_image(image):
     """
     Visualize an image in grayscale.
 
-    @param image: The image.
+    Parameters
+    ----------
+    image : 
+        The image.
     """
     plt.imshow(image, cmap="gray")
     plt.show()
@@ -70,7 +74,8 @@ def gaf(samples):
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     gaf = GramianAngularField(method="summation")
     return gaf.fit_transform(samples)
@@ -80,7 +85,8 @@ def recurrence_plot(samples, eps: float = 0.1, steps: int = 10):
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     results = []
     for s in samples.values:
@@ -95,7 +101,8 @@ def get_quantiles(min_value=0, max_val=1, k=10):
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     c = (max_val - min_value)/k
     b = min_value + c
@@ -111,7 +118,8 @@ def value_to_quantile(x):
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     quantiles = get_quantiles()
     for i, k in enumerate(quantiles):
@@ -123,7 +131,8 @@ def mtf(samples, size=10):
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     results = []
 
@@ -149,10 +158,17 @@ def batch_value(value: int, batch_size: int) -> list[int]:
     """
     Calculate batching. For example if value is 33 and the batch size is 10, the corresponding batching will be [10, 10, 10, 3].
 
-    @param value: Number of samples to batch.
-    @param batch_size: The batch_size.
+    Parameters
+    ----------
+    value : int
+        Number of samples to batch.
+    batch_size : int
+        The batch_size.
 
-    @return Batching list.
+    Returns
+    -------
+    batches : list[int]
+        Batching list.
     """
     full_batches = [batch_size] * (value // batch_size)
     remainder    = value % batch_size
@@ -168,7 +184,8 @@ def transform_data(output_path: str, data: dict[str, pd.DataFrame], batch_size: 
     """
     Summary.
 
-    @param
+    Parameters
+    ----------
     """
     features_df = data["features"]
     labels_df   = data["labels"]

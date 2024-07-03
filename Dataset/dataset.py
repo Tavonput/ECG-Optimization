@@ -18,12 +18,18 @@ class EcgDataset(Dataset):
 
     ECG dataset from MIT-BIH transformed into images and loaded from a HDF5 file. To be used with PyTorch DataLoader.
 
-    @param file_path: Path to HDF5 dataset file.
-    @param transform: Additional tensor transforms to apply.
-    @param preload: Whether or not the data should be preloaded host memory.
-    @param half_precision: Whether or not the data should sent to FP16
+    Parameters
+    ----------
+    file_path : str
+        Path to HDF5 dataset file.
+    transform : A transform from PyTorch
+        Additional tensor transforms to apply.
+    preload : bool
+        Whether or not the data should be preloaded host memory.
+    half_precision : bool 
+        Whether or not the data should sent to FP16
     """
-    def __init__(self, file_path: str, transform=None, preload=False, half_precision=False) -> None:
+    def __init__(self, file_path: str, transform = None, preload: bool = False, half_precision: bool = False) -> None:
         super().__init__()
 
         self.h5_file   = h5py.File(file_path, "r")
@@ -78,16 +84,27 @@ def build_dataloader(
     """
     Build the train and test dataloaders from EcgDataset.
 
-    @param train_path: Path to HDF5 training set.
-    @param test_path: Path to HDF5 test set.
-    @param batch_size: Batch size for train and test sets.
-    @param transform: PyTorch transform to apply on the images after tensor conversion.
-    @param preload: Whether or not the data should be preloaded into host memory.
-    @param half_precision: Whether or not the data should be loaded as FP16.
+    Parameters
+    ----------
+    train_path : str
+        Path to HDF5 training set.
+    test_path : str
+        Path to HDF5 test set.
+    batch_size : int
+        Batch size for train and test sets.
+    transform : A Pytorch transform
+        PyTorch transform to apply on the images after tensor conversion.
+    preload : bool
+        Whether or not the data should be preloaded into host memory.
+    half_precision : bool
+        Whether or not the data should be loaded as FP16.
 
-    @return Dictionary containing two entries:
-        "train": Training dataloader
-        "test":  Testing dataloader
+    Returns
+    -------
+    dataloaders : dict {str : DataLoader}
+        Dictionary containing two entries:
+            "train": Training dataloader
+            "test":  Testing dataloader
 
     TODO: Transforms provided by the user should be a list of transforms rather than just one.
     """
@@ -124,7 +141,10 @@ def visualize_ecg_data(dataloader: DataLoader) -> None:
     """
     Visualize the transformed ECG data.
 
-    @param dataloader: Dataloader for the ECG data.
+    Parameters
+    ----------
+    dataloader : DataLoader
+        Dataloader for the ECG data.
     """
     batch = next(iter(dataloader))
     num_images = len(batch[0])
@@ -144,9 +164,15 @@ def examine_dataset(dataset_path: str) -> dict[str, int]:
     """
     Examine the keys in a hdf5 file.
 
-    @param dataset_path: Path to hdf5 file.
+    Parameters
+    ----------
+    dataset_path : str 
+        Path to hdf5 file.
     
-    @return Dataset information in the form of a dictionary.
+    Returns
+    -------
+    stats : dict {str : int}
+        Dataset information in the form of a dictionary.
     """
     data = dict()
     with h5py.File(dataset_path, "r") as hdf:

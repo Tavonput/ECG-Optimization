@@ -30,6 +30,20 @@ class TestDataGeneration(unittest.TestCase):
         self.assertEqual(len(heartbeats), len(labels))
         self.assertEqual(len(heartbeats[0]), window_size)
 
+
+    def test_split_value(self):
+        base_number = 100
+        
+        ordered_1, ordered_2 = split_value(base_number, 0.8, shuffle=False)
+        self.assertTrue(len(ordered_1) == 80)
+        self.assertTrue(len(ordered_2) == 20)
+
+        shuffle_1, shuffle_2 = split_value(base_number, 0.8, shuffle=True)
+
+        # If these ever fail, that's crazy
+        self.assertTrue(list(ordered_1) != list(shuffle_1))
+        self.assertTrue(list(ordered_2) != list(shuffle_2))
+
     
 if __name__ == "__main__":
     unittest.main()
