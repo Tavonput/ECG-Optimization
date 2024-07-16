@@ -1,5 +1,7 @@
+import time
 import random
 import h5py
+import logging
 
 import torch
 
@@ -8,6 +10,14 @@ from torch.utils.data import DataLoader, Dataset
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+import psutil
+
+
+LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FORMAT)
+logging.getLogger("DTSET").setLevel(logging.INFO)
+log = logging.getLogger("DTSET")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -29,27 +39,41 @@ class EcgDataset(Dataset):
     half_precision : bool 
         Whether or not the data should sent to FP16
     """
-    def __init__(self, file_path: str, transform = None, preload: bool = False, half_precision: bool = False) -> None:
+    def __init__(self, file_path: str, transform = None, preload: bool = False, half_precision: bool = False, max_memory: float = 0.95) -> None:
         super().__init__()
+        log.info(f"Building ECG Dataset from {file_path}")
 
         self.h5_file   = h5py.File(file_path, "r")
         self.images    = self.h5_file["images"]
         self.labels    = self.h5_file["labels"]
         
+        self.num_images = len(self.images)
+        self.num_labels = len(self.labels)
+
         self.transform      = transform
         self.preload        = preload
         self.half_precision = half_precision
 
+        self.max_memory = max_memory
+        memory_okay     = self._check_memory_usage()
+
         if preload:
-            self.preloaded_images = [i for i in self.images]
-            self.preloaded_labels = [l for l in self.labels]
+            if memory_okay is False:
+                log.warning("\tUsing too much memory. Disabling preload")
+            else:
+                log.info("\tPreloading images and labels")
+                self.preloaded_images = [i for i in self.images]
+                self.preloaded_labels = [l for l in self.labels]
+
 
     def __del__(self):
         self.h5_file.close()
 
+
     def __len__(self):
-        return len(self.images)
+        return self.num_images
     
+
     def __getitem__(self, idx):
         if self.preload:
             image = self.preloaded_images[idx]
@@ -73,13 +97,51 @@ class EcgDataset(Dataset):
         return image, label
     
 
+    def _check_memory_usage(self) -> bool:
+        """
+        Check if there is enough memory available.
+        """
+        memory_info = psutil.virtual_memory()
+        available   = memory_info.available
+        needed      = self._compute_memory_usage()
+
+        log.info(f"\tAvailable Memory: {(available / 1024 ** 3):.2f} GiB")
+        log.info(f"\tDataset Memory:   {(needed / 1024 ** 3):.2f} GiB")
+        
+        left_over = available - needed
+        threshold = memory_info.total * (1 - self.max_memory)
+        if left_over <= threshold:
+            log.warning(f"\tUsing too much memory (Left Over: {(left_over / 1024 ** 3):.2f}, Safety: {(threshold / 1024 ** 3):.2f}). Preloading or caching might struggle")
+            return False
+        
+        return True
+
+
+    def _compute_memory_usage(self) -> float:
+        """
+        Compute the total number of bytes for the dataset.
+        """
+        images_dtype = self.images.dtype
+        labels_dtype = self.labels.dtype
+
+        num_image_elements = np.prod(self.images.shape, dtype=np.float64)
+        num_label_elements = np.prod(self.labels.shape, dtype=np.float64)
+
+        images_memory = num_image_elements * images_dtype.itemsize
+        labels_memory = num_label_elements * labels_dtype.itemsize
+
+        return images_memory + labels_memory
+    
+
 def build_dataloader(
     train_path:     str, 
     test_path:      str, 
     batch_size:     int, 
     transform, 
-    preload:        bool = False,
+    preload_train:  bool = False,
+    preload_test:   bool = False,
     half_precision: bool = False,
+    max_memory:     float = 0.95
 ) -> dict[str, DataLoader]:
     """
     Build the train and test dataloaders from EcgDataset.
@@ -94,11 +156,15 @@ def build_dataloader(
         Batch size for train and test sets.
     transform : A Pytorch transform
         PyTorch transform to apply on the images after tensor conversion.
-    preload : bool
-        Whether or not the data should be preloaded into host memory.
+    preload_train : bool
+        Whether or not the training data should be preloaded into host memory.
+    preload_test : bool
+        Whether or not the testing data should be preloaded into host memory.
     half_precision : bool
         Whether or not the data should be loaded as FP16.
-
+    max_memory : float
+        Ratio of for the maximum amount of memory before sending a warning.
+        
     Returns
     -------
     dataloaders : dict {str : DataLoader}
@@ -108,20 +174,21 @@ def build_dataloader(
 
     TODO: Transforms provided by the user should be a list of transforms rather than just one.
     """
+    if transform is None:
+        trans = Compose([ToTensor()])
+    elif isinstance(transform, list):
+        trans = Compose([ToTensor()] + transform)
+    else:
+        trans = Compose([ToTensor(), transform])
+
     transforms = {
-        "train": Compose([
-            ToTensor(),
-            transform,
-        ]),
-        "test": Compose([
-            ToTensor(),
-            transform,
-        ])
+        "train": trans,
+        "test":  trans
     }
 
     dataset = {
-        "train": EcgDataset(train_path, transform=transforms["train"], preload=preload, half_precision=half_precision),
-        "test":  EcgDataset(test_path, transform=transforms["test"], preload=preload, half_precision=half_precision),       
+        "train": EcgDataset(train_path, transform=transforms["train"], preload=preload_train, half_precision=half_precision, max_memory=max_memory),
+        "test":  EcgDataset(test_path, transform=transforms["test"], preload=preload_test, half_precision=half_precision, max_memory=max_memory),       
     }
 
     dataloader = {}
@@ -182,3 +249,36 @@ def examine_dataset(dataset_path: str) -> dict[str, int]:
             data[f"{key}_dtype"] = hdf[key].dtype
             
     return data
+
+
+def benchmark_dataloader(loader: DataLoader, num_batches: int = 100) -> float:
+    # Warmup for cache
+    for i, batch in enumerate(loader):
+        if i >= num_batches - 1:
+            break
+
+    start_time = time.time()
+    for i, batch in enumerate(loader):
+        if i >= num_batches - 1:
+            break
+
+    end_time = time.time()
+    return (end_time - start_time) / num_batches
+
+#===========================================================================================================================
+# Main (Used for testing this file)
+#
+if __name__ == "__main__":
+    import sys
+    sys.path.append("../")
+
+    dataloader = build_dataloader(
+        train_path = "../Data/MIT-BIH-Raw/Datasets/Resolution-64/image_unfiltered_i64_train.h5",
+        test_path  = "../Data/MIT-BIH-Raw/Datasets/Resolution-64/image_unfiltered_i64_test.h5",
+        transform  = None,
+        batch_size = 128,
+        preload    = True
+    )
+
+    print("Benchmarking...")
+    print(benchmark_dataloader(dataloader["test"], 100))

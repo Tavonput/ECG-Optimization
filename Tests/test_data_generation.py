@@ -1,9 +1,11 @@
-import unittest
-
 import sys
 sys.path.append("../")
 
+import unittest
 from Dataset.data_generation import *
+
+import numpy as np
+
 
 class TestDataGeneration(unittest.TestCase):
 
@@ -43,6 +45,20 @@ class TestDataGeneration(unittest.TestCase):
         # If these ever fail, that's crazy
         self.assertTrue(list(ordered_1) != list(shuffle_1))
         self.assertTrue(list(ordered_2) != list(shuffle_2))
+
+
+    def test_resize_image(self):
+        dummy_input = np.random.randn(2, 3, 256, 256)
+
+        dummy_output = resize_images(dummy_input, 128)
+        self.assertEqual(dummy_output.shape, (2, 3, 128, 128))
+
+
+    def test_crop_image(self):
+        dummy_input = np.random.randn(2, 3, 256, 256)
+
+        dummy_output = crop_images(dummy_input, 128)
+        self.assertEqual(dummy_output.shape, (2, 3, 128, 128))
 
     
 if __name__ == "__main__":

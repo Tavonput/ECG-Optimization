@@ -20,3 +20,4 @@ pyts
 
 wfbd
 h5py
+psutil
