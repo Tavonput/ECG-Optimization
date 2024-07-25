@@ -7,26 +7,35 @@ import cv2
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
-logging.getLogger("IMG").setLevel(logging.DEBUG)
-log = logging.getLogger("IMG")
+logging.getLogger("IMGBT").setLevel(logging.DEBUG)
+log = logging.getLogger("IMGBT")
+
 
 #===========================================================================================================================
 # Image Batcher
 #
 class ImageBatcher:
     """
-    @class Image Batcher
+    Image Batcher
 
     Batches images from a hdf5. An instance of an ImageBatcher should be used as an iterator. For quickest batching, the
     dataset must be pre-shuffled. Samples from an hdf5 file must be loaded one at a time if using random access (needed for 
     shuffling), which can be quite slow.
 
-    @param file_path: Path to hdf5 file.
-    @param batch_size: Batch size.
-    @param image_sie: Image size.
-    @param shuffle: Whether or not to shuffle the data.
-    @param drop_last: Whether or not to drop the last batch if it is not equal to the batch size.
-    @param max_batch: Maximum number of batches to load from dataset. A max batch of 0 (default) means no maximum.
+    Parameters
+    ----------
+    file_path : str
+        Path to hdf5 file.
+    batch_size : int
+        Batch size.
+    image_sie : int
+        Image size.
+    shuffle : bool
+        Whether or not to shuffle the data.
+    drop_last : bool
+        Whether or not to drop the last batch if it is not equal to the batch size.
+    max_batch : int
+        Maximum number of batches to load from dataset. A max batch of 0 (default) means no maximum.
     """
     def __init__(
         self, 
@@ -95,7 +104,10 @@ class ImageBatcher:
         """
         Load the next batch.
 
-        @return Batch of images.
+        Returns
+        -------
+        batch : np.ndarray
+            Batch of images.
         """
         self.current_batch += 1
 
@@ -136,9 +148,15 @@ class ImageBatcher:
         """
         Get the batch of images from the dataset given the indices. Handles shuffling.
 
-        @param indices: List of indices.
+        Parameters
+        ----------
+        indices : list[int]
+            List of indices.
 
-        @return Batch as a numpy array.
+        Returns
+        -------
+        batch : np.ndarray
+            Batch as a numpy array.
         """
         if self.shuffle:
             batch_images = []
@@ -156,11 +174,17 @@ class ImageBatcher:
         """
         Preprocess a batch of images. Performs a resize with bilinear interpolation. Images must be of shape (b, c, h, w).
 
-        @param images: Batch of images (b, c, h, w).
+        Parameters
+        ----------
+        images : np.ndarray
+            Batch of images (b, c, h, w).
 
-        @return Preprocessed batch.
+        Returns
+        -------
+        batch : np.ndarray
+            Preprocessed batch.
         """
-        output_size   = (self.image_size, self.image_size)
+        output_size    = (self.image_size, self.image_size)
         resized_images = np.empty((images.shape[0], images.shape[1], *output_size))
         resized_images = resized_images.astype(self.dtype)
 

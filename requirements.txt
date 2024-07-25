@@ -3,6 +3,7 @@ pandas
 matplotlib
 seaborn
 tqdm
+prettytable
 
 torch
 torchvision
@@ -14,10 +15,10 @@ tensorrt
 pycuda
 
 opencv_python
-scikit-learn
-imbalance-learn
 pyts
 
-wfbd
+wfdb
 h5py
 psutil
+pyyaml
+gdown

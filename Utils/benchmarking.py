@@ -38,7 +38,7 @@ class ModelStats:
     params:   int   = 0
     latency:  float = 0
     accuracy: float = 0
-    
+
 
 def add_model_stat_to_json(path: str, data: ModelStats) -> None:
     """
@@ -51,7 +51,7 @@ def add_model_stat_to_json(path: str, data: ModelStats) -> None:
     data : ModelStats
         ModelStats instance to add.
     """
-    print(f"[I]: Adding model stat to {path}")
+    log.info(f"Adding model stat to {path}")
     if not os.path.exists(path):
         with open(path, "w") as _:
             pass
@@ -86,14 +86,14 @@ def get_model_stats_from_json(path: str, model_names: list[str], sort: bool = Fa
         List of ModelStats.
     """
     if not os.path.exists(path):
-        print(f"Path does not exist {path}")
+        log.error(f"Path does not exist {path}")
         return None
 
     with open(path, "r") as file:
         try:
             database = json.load(file)
         except:
-            print(f"There is no data in {path}")
+            log.error(f"There is no data in {path}")
             return None
         
     # Get all model stats for the provided names
@@ -111,6 +111,24 @@ def get_model_stats_from_json(path: str, model_names: list[str], sort: bool = Fa
         model_stats = sorted_stats
     
     return model_stats
+
+def get_model_size(param_count: int, bit_width: int) -> float:
+    """
+    Get the model size in MB.
+
+    Parameters
+    ----------
+    param_count : int
+        The number of parameters.
+    bit_width : int
+        The bit width.
+    
+    Returns
+    -------
+    size : float
+        The size in MB.
+    """
+    return param_count * bit_width / MiB
 
 
 def get_model_macs(model: nn.Module, inputs: torch.Tensor) -> int:
@@ -247,28 +265,28 @@ def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str, no_late
     stats : ModelStats
         ModelStats instance.
     """
-    print(f"[I]: Benchmarking model {name}")
+    log.info(f"Benchmarking model {name}")
     model.eval()
     model.to("cpu")
 
     dummy_input = next(iter(dataloader))[0][0].unsqueeze(0)
 
-    print(f"[I]: \tGetting model params and MACs")
+    log.info(f"\tGetting model params and MACs")
     macs    = get_model_macs(deepcopy(model).to(torch.float32), dummy_input.clone().to(torch.float32))
     params  = get_num_parameters(model)
 
     if no_latency:
-        print(f"[I]: \tLatency measurement skipped")
+        log.info(f"\tLatency measurement skipped")
         latency = 0
     else:
-        print(f"[I]: \tMeasuring latency")
+        log.info(f"\tMeasuring latency")
         latency = measure_latency(model, dummy_input)
 
-    print(f"[I]: \tEvaluating")
+    log.info(f"\tEvaluating")
     model.to(device)
     accuracy = evaluate(model, dataloader)
 
-    print(f"[I]: Benchmarking for {name} finished")
+    log.info(f"Benchmarking for {name} finished")
     return ModelStats(
         macs     = macs, 
         params   = params, 

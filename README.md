@@ -2,6 +2,8 @@
 Optimized deep learning for Arrhythmia classification using the MIT BIH database.
 
 ## Repository Structure
+`Experiments` contains code for running experiments.
+
 `Notebooks` contains the main implementations for running experiments.
 
 `Dataset` contains everything related to data generation and working with the dataset.
@@ -15,7 +17,7 @@ Optimized deep learning for Arrhythmia classification using the MIT BIH database
 `Utils` contains useful utilities, for example loading models from torchvision.
 
 ## Quantization With TensorRT
-This repository uses TensorRT 10.1. Earlier versions of TensorRT may not work.
+This repository uses TensorRT 10.2. Earlier versions of TensorRT may not work.
 
 ## Notes
 Some dependencies in the `requirements.txt` will not download automatically with just pip. For example, *pycuda* requires that you have the cuda toolkit properly installed on your system.

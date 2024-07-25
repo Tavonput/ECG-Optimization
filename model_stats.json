@@ -278,5 +278,19 @@
         "params": 2598860,
         "latency": 0.00022530455589294434,
         "accuracy": 98.23223095194592
+    },
+    {
+        "name": "ResNet50 - Resolution 128",
+        "macs": 1349136384.0,
+        "params": 23518277,
+        "latency": 0.008483602261543275,
+        "accuracy": 98.86737823486328
+    },
+    {
+        "name": "ResNet50 - Resolution 128 - Full Optimization",
+        "macs": 0,
+        "params": 2112097,
+        "latency": 0.0008268507957458496,
+        "accuracy": 98.51114358786994
     }
 ]

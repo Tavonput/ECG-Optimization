@@ -13,9 +13,15 @@ def load_model(name: str) -> nn.Module:
     """
     Load pretrained model from torchvision.
 
-    @param: Name of the model.
+    Parameters
+    ----------
+    name : str
+        Name of the model.
 
-    @return: Pretrained model.
+    Returns
+    -------
+    model : nn.Module
+        Pretrained model.
     """
     match name:
         case "alexnet":
@@ -36,17 +42,74 @@ def load_model(name: str) -> nn.Module:
             return mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.DEFAULT)
 
 
-def load_model_from_pretrained(name: str, path: str, num_classes: int) -> nn.Module:
+def replace_classifier(name: str, model: nn.Module, num_classes: int) -> None:
+    """
+    Replace the classification layer to output a certain number of classes.
+
+    Parameters
+    ----------
+    name : str
+        The name of the model.
+    model : nn.Module
+        The model.
+    num_classes : The number of classes.
+    """
+    match name:
+        case "resnet18":
+            model.fc = nn.Linear(512, num_classes)
+        case "resnet50":
+            model.fc = nn.Linear(2048, num_classes)
+        case "mobilenet_v3_small":
+            model.classifier[3] = nn.Linear(1024, num_classes)
+
+
+def get_classifier(name: str, model: nn.Module) -> nn.Module:
+    """
+    Get the classification layer of a model.
+
+    Parameters
+    ----------
+    name : str
+        The name of the model.
+    model : nn.Module
+        The model.
+
+    Returns
+    -------
+    classifier : nn.Module
+        The classifier layer.
+    """
+    match name:
+        case "resnet18":
+            return model.fc
+        case "resnet50":
+            return model.fc
+        
+
+def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load: bool = False) -> nn.Module:
     """
     Load a torchvision vision model from a state dict checkpoint. The final layer output will be replaced 
     with the specified number of classes.
 
-    @param name: Name of model.
-    @param path: Path to state dict checkpoint.
-    @param num_classes: Number of classes the final layer should output.
+    Parameters
+    ----------
+    name : str
+        Name of model.
+    path : str
+        Path to state dict checkpoint.
+    num_classes : int
+        Number of classes the final layer should output.
+    full_load : bool
+        Load the model from a full save.
 
-    @return Model loaded from a weight state dict.
+    Returns
+    -------
+    model : nn.Module
+        The pretrained model.
     """
+    if full_load:
+        return torch.load(path)
+
     model = None
     match name:
         case "alexnet":
@@ -109,12 +172,21 @@ def load_vgg_from_pruned(
     """
     Load a pretrained torchvision VGG16_BN that has been pruned at the layer level.
 
-    @param path: Path to the state dict checkpoint.
-    @param pruning_ratio: Pruning ratio that the model was pruned at.
-    @param dummy_input: Dummy input for tracing.
-    @param num_classes: Number of classes the output layer should have.
+    Parameters
+    ----------
+    path : str
+        Path to the state dict checkpoint.
+    pruning_ratio : float
+        Pruning ratio that the model was pruned at.
+    dummy_input : torch.Tensor
+        Dummy input for tracing.
+    num_classes : int
+        Number of classes the output layer should have.
 
-    @return Pretrained pruned VGG.
+    Returns
+    -------
+    model : nn.Module
+        Pretrained pruned VGG.
     """
     model = vgg16_bn()
     model.classifier[6] = nn.Linear(4096, num_classes)
@@ -146,12 +218,21 @@ def load_vgg_custom_from_pruned(
     """
     Load a pretrained torchvision VGG16_BN that has been pruned at the layer level.
 
-    @param path: Path to the state dict checkpoint.
-    @param pruning_ratio: Pruning ratio that the model was pruned at.
-    @param dummy_input: Dummy input for tracing.
-    @param num_classes: Number of classes the output layer should have.
+    Parameters
+    ----------
+    path : str
+        Path to the state dict checkpoint.
+    pruning_ratio : float
+        Pruning ratio that the model was pruned at.
+    dummy_input : torch.Tensor
+        Dummy input for tracing.
+    num_classes : int
+        Number of classes the output layer should have.
 
-    @return Pretrained pruned VGG.
+    Returns
+    -------
+    model : nn.Module
+        Pretrained pruned VGG.
     """
     model = vgg16_bn()
     model.avgpool = nn.AdaptiveAvgPool2d((4, 4))
@@ -169,6 +250,55 @@ def load_vgg_custom_from_pruned(
         importance        = imp,
         pruning_ratio     = pruning_ratio,
         ignored_layers    = ignored_layers,
+    )
+    pruner.step()
+
+    model.load_state_dict(torch.load(path))
+    return model
+
+
+def load_from_layer_pruned(
+    model_name:    str,
+    path:          str, 
+    pruning_ratio: float, 
+    dummy_input:   torch.Tensor,
+    num_classes:   int = 5,
+) -> nn.Module:
+    """
+    Load a pretrained model that was layer pruned.
+
+    Parameters
+    ----------
+    model_name : str
+        The model name.
+    path : str
+        Path to the state dict checkpoint.
+    pruning_ratio : float
+        Pruning ratio that the model was pruned at.
+    dummy_input : torch.Tensor
+        Dummy input for tracing.
+    num_classes : int
+        Number of classes the output layer should have.
+
+    Returns
+    -------
+    model : nn.Module
+        Pretrained pruned model.
+    """
+    model = load_model(model_name)
+    replace_classifier(model_name, model, num_classes)
+    classifier = get_classifier(model_name, model)
+
+    model.to("cpu")
+    model.eval()
+
+    imp = tp.importance.MagnitudeImportance(p=2)
+    pruner = tp.pruner.MagnitudePruner(
+        model             = model,
+        example_inputs    = dummy_input,
+        importance        = imp,
+        pruning_ratio     = pruning_ratio,
+        ignored_layers    = [classifier],
     )
     pruner.step()
 

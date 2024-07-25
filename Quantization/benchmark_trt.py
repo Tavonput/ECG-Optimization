@@ -1,4 +1,5 @@
 import time
+import logging
 
 import torch
 from torch.utils.data import DataLoader
@@ -8,6 +9,11 @@ from tqdm.auto import tqdm
 
 from .inference import *
 
+
+LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FORMAT)
+logging.getLogger("BCTRT").setLevel(logging.INFO)
+log = logging.getLogger("BCTRT")
 
 Byte = 8
 KiB  = 1024 * Byte
@@ -28,10 +34,17 @@ def evaluate_trt(engine_path: str, dataloader: DataLoader) -> float:
     """
     Evaluate a TensorRt engine with a PyTorch dataloader.
 
-    @param engine_path: Path to TensorRT engine.
-    @param dataloader: Testing dataloader.
+    Parameters
+    ----------
+    engine_path : str
+        Path to TensorRT engine.
+    dataloader : DataLoader
+        Testing dataloader.
 
-    @return Accuracy.
+    Returns
+    -------
+    accuracy : float
+        The accuracy.
     """
     trt_context = create_trt_context(engine_path)
     
@@ -66,11 +79,19 @@ def measure_latency(engine_path: str, n_warmup: int = 50, n_test: int = 50) -> f
     """
     Measure the latency of a TensorRT engine. Latency testing is ran 10 times and then averaged.
 
-    @param engine_path: Path to TensorRT engine.
-    @param n_warmup: Number of warmup iterations.
-    @param n_test: Number of forward passes.
+    Parameters
+    ----------
+    engine_path : str
+        Path to TensorRT engine.
+    n_warmup : int
+        Number of warmup iterations.
+    n_test : int
+        Number of forward passes.
 
-    @return Latency in seconds.
+    Returns
+    -------
+    latency : float
+        Latency in seconds.
     """
     trt_context = create_trt_context(engine_path)
 
@@ -106,30 +127,40 @@ def measure_latency(engine_path: str, n_warmup: int = 50, n_test: int = 50) -> f
     return sum(times) / len(times)
 
 
-def benchmark_model_trt(engine_path: str, dataloader: DataLoader, name: str) -> ModelStats:
+def benchmark_model_trt(engine_path: str, dataloader: DataLoader, name: str) -> tuple[ModelStats, list]:
     """
     Benchmark a TensorRT engine for accuracy and latency. Does not set the parameter count or MACs.
 
-    @param engine_path: Path to TensorRT engine.
-    @param dataloader: Testing dataloader.
-    @param name: Name to attach to results.
+    Parameters
+    ----------
+    engine_path : str
+        Path to TensorRT engine.
+    dataloader : DataLoader
+        Testing dataloader.
+    name : str
+        Name to attach to results.
 
-    @return ModelStats instance without param or macs set.
+    Returns
+    -------
+    stats : ModelStats
+        ModelStats instance without param or macs set.
+    latencies : list[float]
+        The list of latencies during each run.
     """
-    print(f"[I]: Benchmarking TensorRT model {name} from {engine_path}")
+    log.info(f"Benchmarking TensorRT model {name} from {engine_path}")
 
-    print(f"[I]: \tEvaluating")
+    log.info(f"\tEvaluating")
     accuracy = evaluate_trt(engine_path, dataloader)
 
-    print(f"[I]: \tMeasuring latency")
+    log.info(f"\tMeasuring latency")
     latencies = []
     for _ in range(0, 10):
         latencies.append(measure_latency(engine_path, n_test=100))
     latency = sum(latencies) / len(latencies)
 
-    print(f"[I]: Benchmark for {name} finished")
+    log.info(f"Benchmark for {name} finished")
     return ModelStats(
         name     = name,
         accuracy = accuracy,
         latency  = latency,
-    )
+    ), latencies

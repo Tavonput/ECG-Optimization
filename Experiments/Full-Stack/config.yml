@@ -1,0 +1,78 @@
+#================================================================================================================
+#
+base_model:
+  do_base: true
+
+  model_name: "resnet50"
+
+  epochs: 50
+  image_size: 128
+  batch_size: 128
+
+  train_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_train.h5"
+  test_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_test.h5"
+  save_dir: "../Pretrained/ECG-Raw/Base"
+
+  preload_train: true
+  preload_test: true
+
+
+#================================================================================================================
+#
+shrinking:
+  do_shrink: false
+
+  model_name: "resnet50"
+
+  resume: false
+  resume_checkpoint: ""
+
+  save_dir: "../Pretrained/ECG-Raw/Window-Shrinking/balance/ResNet50"
+
+
+#================================================================================================================
+#
+pruning:
+  do_prune: false
+
+  model_name: "resnet50"
+  base_checkpoint: "../Pretrained/ECG-Raw/Window-Shrinking/balance/ResNet50/resnet50_ep30_i128_r1.0/resnet50_ep30_i128_r1.0.pth"
+
+  epochs: 35
+  image_size: 128
+  batch_size: 128
+
+  train_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_train.h5"
+  test_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_test.h5"
+  save_dir: "../Pretrained/ECG-Raw/Window-Shrinking/balance/ResNet50/resnet50_ep30_i128_r1.0/Pruned"
+
+  preload_train: true
+  preload_test: false
+
+  prune_ratio: 0.8
+  global_prune: false
+
+
+#================================================================================================================
+#
+quantization:
+  do_quant: false
+
+  model_name: "resnet50"
+  model_path: "../Pretrained/ECG-Raw/Window-Shrinking/balance/ResNet50/resnet50_ep30_i128_r1.0/Pruned/resnet50_ep35_i128_p0.8_layer/resnet50_ep35_i128_p0.8_layer.pth"
+
+  from_pruned: true
+  prune_ratio: 0.8
+
+  bits: 4
+
+  epochs: 30
+  image_size: 128
+  batch_size: 128
+
+  train_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_train.h5"
+  test_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_full_unfiltered_i128_test.h5"
+  save_dir: "../Pretrained/ECG-Raw/Window-Shrinking/balance/ResNet50/resnet50_ep30_i128_r1.0/Quantization/Prune-0.8"
+
+  preload_train: true
+  preload_test: false

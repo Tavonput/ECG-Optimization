@@ -60,6 +60,14 @@ class TestDataGeneration(unittest.TestCase):
         dummy_output = crop_images(dummy_input, 128)
         self.assertEqual(dummy_output.shape, (2, 3, 128, 128))
 
+
+    def test_random_subset(self):
+        indices = random_subset(1000, 1.0, shuffle=True)
+        self.assertEqual(len(indices), 1000)
+
+        indices = random_subset(1000, 0.4, shuffle=True)
+        self.assertEqual(len(indices), 400)
+    
     
 if __name__ == "__main__":
     unittest.main()

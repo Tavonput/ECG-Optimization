@@ -16,6 +16,11 @@ from .classification import TrainingStats
 # TODO: Currently in the process of refactoring. Some function need to use the PlotConfig struct. Use subplot ax instead
 #       of plt.
 #
+
+
+#===========================================================================================================================
+# Structures and Helper Classes
+#
 @dataclass
 class PlotConfig:
     title:   str  = "Title"
@@ -87,7 +92,9 @@ class GroupedValues:
     def add_to_group(self, group: str, value: int|float, error: int|float = 0) -> None:
         self.groups[group].append(GroupedValues.Entry(value, error))
 
-
+#===========================================================================================================================
+# Specific Plots and Tables
+#
 def compare_models(
     models_stats: list[ModelStats], 
     show_macs:    bool = True, 
@@ -97,10 +104,16 @@ def compare_models(
     """
     Compare a list of ModelStats displayed with a bar graphs.
 
-    @param model_stats: List of ModelStats to compare.
-    @param show_macs: Whether or not to show the MACs plot.
-    @param show_params: Whether or not to show the params plot.
-    @param fig_size: Figure size of the plots.
+    Parameters
+    ----------
+    model_stats : list[ModelStats]
+        List of ModelStats to compare.
+    show_macs : bool
+        Whether or not to show the MACs plot.
+    show_params : bool
+        Whether or not to show the params plot.
+    fig_size : tuple(int, int)
+        Figure size of the plots.
     """
     sns.set_style("whitegrid")
 
@@ -144,7 +157,10 @@ def display_model_stats(model_stats: ModelStats) -> None:
     """
     Formatted display of a ModelStats instance.
 
-    @param model_stats: ModelStats instance.
+    Parameters
+    ----------
+    model_stats : ModelStats
+        ModelStats instance.
     """
     print(f"Name:     {model_stats.name}")
     print(f"Accuracy: {model_stats.accuracy:.2f}%")
@@ -153,7 +169,40 @@ def display_model_stats(model_stats: ModelStats) -> None:
     print(f"MACs:     {round(model_stats.macs / 1e6)} M")
 
 
-def bar_plot(
+def display_training_stat_table(stats: list[TrainingStats], base: TrainingStats, names: list[str], title: str, base_discard: int = 20) -> None:
+    """
+    Display a table of different training stats compared against a baseline.
+
+    Parameters
+    ----------
+    stats : list[TrainingStats]
+        The list of training stats.
+    base : TrainingStats
+        The baseline training stats.
+    names : list[str]
+        The list of names for each training stats.
+    title : str
+        The title of the table.
+    base_discard : int
+        The epoch discard for the baseline.
+    """
+    print(f"=== {title} | Top   | Mean  | STD    | Abs    | Rel")
+
+    top_base, mean_base, std_base = compute_top_mean_std(base.running_accuracy, discard=base_discard)
+    print(f"Base    | {round(top_base, 2):.2f} | {round(mean_base, 2):.2f} | {round(std_base, 4):.4f} | ------ | ------")
+
+    for i, stat in enumerate(stats):
+        top, mean, std = compute_top_mean_std(stat.running_accuracy, discard=10)
+        mean_diff      = mean - mean_base
+        mean_diff_norm = mean / mean_base
+
+        print(f"{names[i]}| {round(top, 2):.2f} | {round(mean, 2):.2f} | {round(std, 4):.4f} | {round(mean_diff, 4):.4f} | {round(mean_diff_norm, 4):.4f}")
+
+
+#===========================================================================================================================
+# Generic Plots
+#
+def plot_bar(
     values:     dict[str, float|int],
     config:     PlotConfig,
     horizontal: bool = True,
@@ -216,7 +265,7 @@ def bar_plot(
     plt.show()
 
 
-def bar_plot_error(
+def plot_bar_error(
     values:     dict[str, tuple[float|int, float]],
     config:     PlotConfig,
     horizontal: bool = True,
@@ -260,50 +309,58 @@ def bar_plot_error(
     plt.show()
 
 
-def compare_list_values(
-    values:  dict[str, list],
-    x_axis:  str   = None,
-    y_axis:  str   = None,
-    title:   str   = None,
-    y_range: tuple = None
+def plot_xy_single(
+    values:   dict[str, list],
+    config:   PlotConfig,
+    callback: Callable = None,
+    **kwargs
 ) -> None:
     """
     Compare lists of values through a plot.
 
-    @param values: Dictionary containing {"label": list of values}.
-    @param x_axis: Label for x-axis.
-    @param y_axis: Label for y_axis.
-    @param title: Title.
-    @param r_range: Range of display for the y-axis (min, max).
+    Parameters
+    ----------
+    values : dict{str, list}
+        Dictionary containing {"label": list of values}.
+    config : PlotConfig
+        The plotting config.
+    callback : Callable
+        A callback function for user defined plotting. function(ax, config, **kwargs).
+    **kwargs
+        Passed to the callback function.
     """
     sns.set_style("whitegrid")
     sns.set_palette("husl")
 
+    _, ax = plt.subplots(figsize=config.fig_size)
     for k, v in values.items():
-        plt.plot(v, label=k)
+        ax.plot(v, label=k)
 
-    if y_range:
-        plt.ylim(y_range[0], y_range[1])
-    if x_axis:
-        plt.xlabel(x_axis)
-    if y_axis:
-        plt.ylabel(y_axis)
-    if title:
-        plt.title(title)
-        
-    plt.legend()
+    ax.set_ylim(config.y_range)
+    ax.set_xlabel(config.x_label)
+    ax.set_ylabel(config.y_label)
+    ax.set_title(config.title)
+    ax.legend()
+
+    if callback is not None:
+        callback(ax, config, **kwargs)
+
     plt.show()
 
 
-def compare_pairwise(
+def plot_xy_pair(
     values: dict[str, list[tuple]],
     config: PlotConfig
 ) -> None:
     """
     Normal pairwise (x, y) plot.
 
-    @param values: Dictionary containing labels and points {name : list of (x, y)}.
-    @param config: PlotConfig.
+    Parameters
+    ----------
+    values : dict{str, list[tuple]}
+        Dictionary containing labels and points {name : list of (x, y)}.
+    config : PlotConfig
+        PlotConfig.
     """
     sns.set_style("whitegrid")
     sns.set_palette("husl")
@@ -322,6 +379,57 @@ def compare_pairwise(
     ax.set_ylabel(config.y_label)
     ax.set_title(config.title)
     ax.legend()
+    plt.show()
+
+
+def plot_bar_grouped(groups: GroupedValues, config: PlotConfig, callback: Callable = None, **kwargs) -> None:
+    """
+    Grouped bar plot. Has only been tested with a grouping size of 2.
+
+    Parameters
+    ----------
+    groups : GroupedValues
+        The groups (see GroupedValues on how to set this up).
+    config : PlotConfig
+        The plotting config.
+    callback : Callable
+        A callback function for user defined plotting. function(ax, config, **kwargs).
+    **kwargs
+        Passed to the callback function.
+    """
+    _, ax  = plt.subplots(figsize=config.fig_size)
+    colors = sns.color_palette("husl", groups.group_size())
+
+    # Set the location of the x-ticks based of the group sizes.
+    start_tick = (groups.group_size() - 1) / 2
+    interval   = groups.group_size() + 1
+    x_ticks    = [(start_tick + (i * interval)) for i in range(groups.size())]
+    ax.set_xticks(x_ticks)
+    
+    labels = []
+    current_bar = 0
+    for name, group in groups.groups.items():
+        for i, entry in enumerate(group):
+            if entry.error != 0:
+                ax.bar(current_bar, entry.value, yerr=entry.error, color=colors[i], edgecolor="black")
+            else:
+                ax.bar(current_bar, entry.value, color=colors[i], edgecolor="black")
+            current_bar += 1
+
+        current_bar += 1
+        labels.append(name)
+
+    ax.set_xticklabels(labels)
+
+    ax.set_ylim(config.y_range)
+    ax.grid(False, axis="x")
+    ax.set_title(config.title)
+    ax.set_xlabel(config.x_label)
+    ax.legend(config.legend)
+
+    if callback:
+        callback(ax, config, **kwargs)
+
     plt.show()
 
 
@@ -354,82 +462,19 @@ def visualize_image_from_numpy(image: np.ndarray, transpose: bool = False, singl
     plt.show()
 
 
-def grouped_bar_plot(groups: GroupedValues, config: PlotConfig, callback: Callable = None, **kwargs) -> None:
+#===========================================================================================================================
+# Plot Helpers
+#
+def set_black_border(ax: plt.Axes) -> None:
     """
-    Grouped bar plot. Has only been tested with a grouping size of 2.
+    Set the border of the plot black.
 
     Parameters
     ----------
-    groups : GroupedValues
-        The groups (see GroupedValues on how to set this up).
-    config : PlotConfig
-        The plotting config.
-    callback : Callable
-        A callback function for user defined plotting. function(ax, config, **kwargs).
-    **kwargs
-        Passed to the callback function.
+    ax : plt.Axes
+        The plot axes.
     """
-    _, ax  = plt.subplots(figsize=config.fig_size)
-    colors = sns.color_palette("husl", groups.group_size())
-
-    # Set the location of the x-ticks based of the group sizes.
-    start_tick = (groups.group_size() - 1) / 2
-    interval   = groups.group_size() + 1
-    x_ticks    = [(start_tick + (i * interval)) for i in range(groups.size())]
-    ax.set_xticks(x_ticks)
-    
-    labels = []
-    current_bar = 0
-    for name, group in groups.groups.items():
-        for i, entry in enumerate(group):
-            if entry.error != 0:
-                ax.bar(current_bar, entry.value, yerr=entry.error, color=colors[i])
-            else:
-                ax.bar(current_bar, entry.value, color=colors[i])
-            current_bar += 1
-
-        current_bar += 1
-        labels.append(name)
-
-    ax.set_xticklabels(labels)
-
-    ax.set_ylim(config.y_range)
-    ax.grid(False, axis="x")
-    ax.set_title(config.title)
-    ax.set_xlabel(config.x_label)
-    ax.legend(config.legend)
-
-    if callback:
-        callback(ax, config, **kwargs)
-
-    plt.show()
-
-
-def display_training_stat_table(stats: list[TrainingStats], base: TrainingStats, names: list[str], title: str, base_discard: int = 20) -> None:
-    """
-    Display a table of different training stats compared against a baseline.
-
-    Parameters
-    ----------
-    stats : list[TrainingStats]
-        The list of training stats.
-    base : TrainingStats
-        The baseline training stats.
-    names : list[str]
-        The list of names for each training stats.
-    title : str
-        The title of the table.
-    base_discard : int
-        The epoch discard for the baseline.
-    """
-    print(f"=== {title} | Top   | Mean  | STD    | Abs    | Rel")
-
-    top_base, mean_base, std_base = compute_top_mean_std(base.running_accuracy, discard=base_discard)
-    print(f"Base    | {round(top_base, 2):.2f} | {round(mean_base, 2):.2f} | {round(std_base, 4):.4f} | ------ | ------")
-
-    for i, stat in enumerate(stats):
-        top, mean, std = compute_top_mean_std(stat.running_accuracy, discard=10)
-        mean_diff      = mean - mean_base
-        mean_diff_norm = mean / mean_base
-
-        print(f"{names[i]}| {round(top, 2):.2f} | {round(mean, 2):.2f} | {round(std, 4):.4f} | {round(mean_diff, 4):.4f} | {round(mean_diff_norm, 4):.4f}")
+    ax.spines["left"].set_color("black")
+    ax.spines["bottom"].set_color("black")
+    ax.spines["right"].set_color("black")
+    ax.spines["top"].set_color("black")

@@ -6,7 +6,6 @@ import time
 
 import numpy as np
 
-
 from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
 import cv2
 
@@ -453,7 +452,9 @@ def create_raw_dataset(data_path: str, output_path: str, window_size: int, full:
 def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size: int, preprocess: str = None, new_size: int = 0) -> None:
     """
     Create an image dataset from a previous dataset of 1D signal data. Images are processed in batches, thus make sure you tune this parameter
-    such that you do not run out of memory.
+    such that you do not run out of memory. 
+    
+    DEPRECATED: Use create_image_dataset_contiguous instead.
 
     Parameters
     ----------
@@ -468,6 +469,10 @@ def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size:
     new_size : int
         The new size of the image after preprocessing.
     """
+    log.warning("'create_image_dataset' is deprecated. Use create_image_dataset_contiguous instead")
+    create_image_dataset_contiguous(signal_dataset_path, output_path, batch_size, preprocess, new_size)
+    return
+
     if not os.path.exists(signal_dataset_path):
         log.error(f"{signal_dataset_path} does not exist")
         return
@@ -533,6 +538,94 @@ def create_image_dataset(signal_dataset_path: str, output_path: str, batch_size:
             images = hdf["images"]
             images.resize(images.shape[0] + batch, axis=0)
 
+            images[current_idx : (current_idx + batch)] = batch_images
+
+        end_time = time.time()
+        log.info(f"\tCompleted batch in {(end_time - start_time):.4f}s")
+
+        current_idx += batch
+
+    total_end_time = time.time()
+    log.info(f"Image transformation complete. Total time: {(total_end_time - total_start_time):4f}s")
+
+    signal_dataset.close()
+
+
+def create_image_dataset_contiguous(signal_dataset_path: str, output_path: str, batch_size: int, preprocess: str = None, new_size: int = 0) -> None:
+    """
+    Create an image dataset from a previous dataset of 1D signal data. Images are processed in batches, thus make sure you tune this parameter
+    such that you do not run out of memory. This version does not use hdf5 chunking.
+
+    Parameters
+    ----------
+    signal_dataset_path : str
+        Path to hdf5 file containing 1D heartbeat segments.
+    output_path : str 
+        Path of output hdf5 file.
+    batch_size : int
+        Number of samples to process at a time. 
+    preprocess : str
+        Preprocessing method to perform on the images.
+    new_size : int
+        The new size of the image after preprocessing.
+    """
+    if not os.path.exists(signal_dataset_path):
+        log.error(f"{signal_dataset_path} does not exist")
+        return
+
+    output_dir = os.path.dirname(output_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    signal_dataset = h5py.File(signal_dataset_path, "r")
+    segments       = signal_dataset["segments"]
+    labels         = signal_dataset["labels"]
+
+    image_size  = segments.shape[-1] if preprocess is None else new_size
+    num_samples = len(segments)
+
+    # Initialize dataset for images and labels
+    with h5py.File(output_path, "w") as hdf:
+        hdf.create_dataset(
+            "images", 
+            shape    = (num_samples, 3, image_size, image_size), 
+            dtype    = np.float32,
+        )
+        hdf.create_dataset(
+            "labels", 
+            shape    = (num_samples,), 
+            dtype    = int
+        )
+        
+        # The labels should be the exact same
+        image_labels = hdf["labels"]
+        image_labels[:len(labels)] = labels
+
+    # Transform samples in batches
+    batches = batch_value(num_samples, batch_size)
+    current_idx = 0
+    total_start_time = time.time()
+
+    log.info(f"Transforming signals into images from {signal_dataset_path}")
+    log.info(f"\tTotal:      {num_samples}")
+    log.info(f"\tPreprocess: {preprocess}")
+    log.info(f"\tImage Size: {image_size}")
+
+    for i, batch in enumerate(batches):
+        log.info(f"\tProcessing batch {i + 1}/{len(batches)}")
+        start_time = time.time()
+
+        batch_images = signal_to_image(segments[current_idx : (current_idx + batch)])
+
+        if preprocess is not None:
+            if preprocess == "resize":
+                batch_images = resize_images(batch_images, new_size)
+            elif preprocess == "crop":
+                batch_images = crop_images(batch_images, new_size)
+
+        # Store the images
+        with h5py.File(output_path, "a") as hdf:
+            images = hdf["images"]
             images[current_idx : (current_idx + batch)] = batch_images
 
         end_time = time.time()
@@ -888,6 +981,120 @@ def create_preprocessed_dataset(
     original_dataset.close()
 
 
+def create_full_split_sets(
+    dataset_path: str, 
+    output_dir:   str,
+    data_key:     str,
+    num_sets:     int,
+    shuffle:      bool,
+    batch_size:   int
+) -> None:
+    """
+    Create subsets from an original dataset.
+
+    Parameters
+    ----------
+    dataset_path : str
+        The path to the base hdf5 dataset.
+    output_path : str
+        The output path for the subset.
+    data_key : str
+        The key of the main data stored in the original hdf5 dataset.
+    num_sets : int
+        The number of subsets.
+    shuffle : bool
+        Whether or not to shuffle the dataset before creating the subsets.
+    batch_size : int
+        The maximum batch size to use when processing the datasets.
+    """
+    if not os.path.exists(dataset_path):
+        log.error(f"{dataset_path} does not exist")
+        return
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    original_dataset = h5py.File(dataset_path, "r")
+    original_data    = original_dataset[data_key]
+    original_labels  = original_dataset["labels"]
+
+    original_data_shape = list(original_data.shape[1:])
+    num_samples         = original_data.shape[0]
+
+    # Get set indices
+    full_indices = random_subset(num_samples, 1.0, shuffle=shuffle)
+    indices      = np.array_split(full_indices, num_sets)
+
+    log.info(f"Generating full split datasets from {dataset_path}")
+    log.info(f"\tTotal:    {num_samples}")
+    log.info(f"\tNum Sets: {num_sets}")
+    for i, s in enumerate(indices):
+        log.info(f"\tSet {i}:    {len(s)}")
+
+    total_start_time = time.time()
+    for i, set_indices in enumerate(indices):
+        set_path = f"{output_dir}/set_{i}.h5"
+        log.info(f"\tGenerating set {i} and saving to {set_path}")
+
+        # Initialize datasets
+        log.info(f"\t\tInitializing dataset")
+        with h5py.File(set_path, "w") as hdf:
+            hdf.create_dataset(
+                data_key, 
+                shape    = tuple([0]    + original_data_shape), 
+                maxshape = tuple([None] + original_data_shape), 
+                chunks   = tuple([1]    + original_data_shape), 
+                dtype    = original_data.dtype
+            )
+            hdf.create_dataset(
+                "labels", 
+                shape    = (0,), 
+                maxshape = (None,), 
+                chunks   = (1,), 
+                dtype    = original_labels.dtype
+            )
+
+        batches     = batch_value(len(set_indices), batch_size)
+        current_idx = 0
+
+        # Copy over data
+        log.info("\t\tCollecting data from original dataset")
+        start_time = time.time()
+        with h5py.File(set_path, "a") as hdf:
+            subset_data   = hdf[data_key]
+            subset_labels = hdf["labels"]
+
+            for j, batch in enumerate(batches):
+                log.info(f"\t\t\tProcessing batch {j + 1}/{len(batches)}")
+                batch_indices = set_indices[current_idx : (current_idx + batch)]
+
+                batch_data   = []
+                batch_labels = []
+                for i in batch_indices:
+                    batch_data.append(original_data[j])
+                    batch_labels.append(original_labels[j])
+                
+                batch_data   = np.stack(batch_data, axis=0)
+                batch_labels = np.stack(batch_labels, axis=0)
+
+                # Store data
+                subset_data.resize(subset_data.shape[0] + batch, axis=0)
+                subset_data[current_idx : (current_idx + batch)] = batch_data
+
+                subset_labels.resize(subset_labels.shape[0] + batch, axis=0)
+                subset_labels[current_idx : (current_idx + batch)] = batch_labels
+
+                current_idx += batch
+        
+        end_time = time.time()
+        log.info(f"\t\tFinished processing subset {i} in {(end_time - start_time):.4f}s. Stored in {set_path}")
+
+    total_end_time = time.time()
+    log.info(f"Finished processing all {num_sets} sets in {(total_end_time - total_start_time):.4f}s")
+
+    original_dataset.close()
+
+
 #===========================================================================================================================
 # Main (Used for testing this file)
 #
@@ -895,5 +1102,14 @@ if __name__ == "__main__":
     """
     Main used for testing.
     """
+    import sys
+    sys.path.append("../")
 
-    pass
+    create_full_split_sets(
+        dataset_path = f"../Data/MIT-BIH-Raw/Datasets/Resolution-128/signal_unfiltered_i128_train.h5",
+        output_dir   = f"../Data/MIT-BIH-Raw/Datasets/Resolution-128/signal_unfiltered_i128_train_full_split_2",
+        data_key     = "segments",
+        num_sets     = 2,
+        shuffle      = False, # Base dataset is already shuffled
+        batch_size   = 1000
+    )

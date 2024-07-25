@@ -24,24 +24,66 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def quant_initialize() -> None:
     """
+    Initialize quantization with pytorch_quantization.
     """
     log.info("Initializing quantization with pytorch_quantization")
     quant_modules.initialize()
     log.info("Ready to load models")
 
 
-def set_input_calibrators(method: str) -> None:
+def set_input_calibrators(method: str, bits: int = 8) -> None:
     """
+    Set the method and bit width of the inputs.
+
+    Parameters
+    ----------
+    method : str
+        The calibration method. Either 'max' or 'histogram'.
+    bits : int
+        The bit width.
     """
     if method == "max":
-        log.info("Setting input calibrators to 'max'")
-        return # Default is max
-    
-    elif method == "histogram":
-        log.info("Setting input calibrators to 'histogram'")
-        quant_desc = QuantDescriptor(calib_method="histogram")
+        log.info(f"Setting input calibrators to 'max' with bit width {bits}")
+        quant_desc = QuantDescriptor(num_bits=bits) # Default is max
         quant_nn.QuantConv2d.set_default_quant_desc_input(quant_desc)
         quant_nn.QuantLinear.set_default_quant_desc_input(quant_desc)
+        return
+    
+    elif method == "histogram":
+        log.info(f"Setting input calibrators to 'histogram' with bit width {bits}")
+        quant_desc = QuantDescriptor(calib_method="histogram", num_bits=bits)
+        quant_nn.QuantConv2d.set_default_quant_desc_input(quant_desc)
+        quant_nn.QuantLinear.set_default_quant_desc_input(quant_desc)
+        return
+    
+    else:
+        log.warn(f"'{method}' is not supported. Falling back to 'max'")
+        return
+
+
+def set_weight_calibrators(method: str, bits: int = 8) -> None:
+    """
+    Set the method and bit width of the weights.
+
+    Parameters
+    ----------
+    method : str
+        The calibration method. Either 'max' or 'histogram'.
+    bits : int
+        The bit width.
+    """
+    if method == "max":
+        log.info(f"Setting weight calibrators to 'max' with bit width {bits}")
+        quant_desc = QuantDescriptor(num_bits=bits) # Default is max
+        quant_nn.QuantConv2d.set_default_quant_desc_weight(quant_desc)
+        quant_nn.QuantLinear.set_default_quant_desc_weight(quant_desc)
+        return
+    
+    elif method == "histogram":
+        log.info(f"Setting input calibrators to 'histogram' with bit width {bits}")
+        quant_desc = QuantDescriptor(calib_method="histogram", num_bits=bits)
+        quant_nn.QuantConv2d.set_default_quant_desc_weight(quant_desc)
+        quant_nn.QuantLinear.set_default_quant_desc_weight(quant_desc)
         return
     
     else:
@@ -57,6 +99,20 @@ def calibrate(
     **kwargs
 ) -> None:
     """
+    Calibrate a model.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The model.
+    dataloader : DataLoader
+        The dataloader to use for calibration.
+    num_batches : int
+        The number of calibration batches.
+    method : str
+        The calibration method.
+    **kwargs
+        Passed to the given calibration method.
     """
     with torch.no_grad():
         _collect_stats(model, dataloader, num_batches)
@@ -64,7 +120,7 @@ def calibrate(
 
     log.info("Calibration finished. Model is ready for PTQ or to be finetuned with QAT")
 
-
+    
 def export_to_onnx(
     model:       nn.Module, 
     image_size:  int,
@@ -74,10 +130,16 @@ def export_to_onnx(
     """
     Export a QAT model to ONNX.
 
-    @param model: Model to export.
-    @param image_size: Image size.
-    @param batch_size: Batch size.
-    @param export_path: Path to save the ONNX model.
+    Parameters
+    ----------
+    model : nn.Module
+        Model to export.
+    image_size : int
+        Image size.
+    batch_size : int
+        Batch size.
+    export_path : str
+        Path to save the ONNX model.
     """
     dummy_input = torch.randn(batch_size, 3, image_size, image_size, device=device)
 
@@ -92,7 +154,7 @@ def export_to_onnx(
             dummy_input, 
             export_path,
             opset_version       = 17,
-            verbose             = True,
+            verbose             = False,
             input_names         = ["input"],
             output_names        = ["output"],
             do_constant_folding = True,
@@ -107,6 +169,7 @@ def export_to_onnx(
 # https://docs.nvidia.com/deeplearning/tensorrt/pytorch-quantization-toolkit/docs/index.html#
 def _collect_stats(model, data_loader, num_batches):
     """
+    Collect statistics for calibration.
     """
     log.info("Collecting information from activations")
 
@@ -137,6 +200,7 @@ def _collect_stats(model, data_loader, num_batches):
 
 def _compute_amax(model, **kwargs):
     """
+    Compute the calibration scales.
     """
     log.info("Computing scale for calibrators")
 

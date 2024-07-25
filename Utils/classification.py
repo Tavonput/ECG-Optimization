@@ -278,7 +278,9 @@ def finetune(
     lr:          float = 0.01,
     safety:      int   = 0,
     safety_dir:  str   = None,
-    do_eval:     bool  = True
+    do_eval:     bool  = True,
+    save_best:   bool  = True,
+    full_save:   bool  = False,
 ) -> TrainingStats:
     """
     Basic finetune implementation.
@@ -301,6 +303,10 @@ def finetune(
         Save directory for safety checkpoints.
     do_eval : bool
         Whether or not to evaluate after every epoch.
+    save_best : bool
+        Whether or not to save the best epoch if do_eval is True.
+    full_save : bool
+        Save the entire model, not just the state dict.
 
     Returns
     -------
@@ -343,6 +349,9 @@ def finetune(
             stats.running_accuracy.append(accuracy)
 
             if accuracy > stats.best_accuracy:
+                if full_save:
+                    best_model_checkpoint["model"] = copy.deepcopy(model)
+                    
                 best_model_checkpoint["state_dict"] = copy.deepcopy(model.state_dict())
                 stats.best_accuracy = accuracy
 
@@ -370,10 +379,18 @@ def finetune(
 
     stats.training_time = end_time - start_time
 
-    if do_eval:
-        torch.save(best_model_checkpoint["state_dict"], save_path)
+    if do_eval and save_best:
+        if full_save:
+            best_model_checkpoint["model"].zero_grad()
+            torch.save(best_model_checkpoint["model"], save_path)
+        else:
+            torch.save(best_model_checkpoint["state_dict"], save_path)
     else:
-        torch.save(model.state_dict(), save_path)
+        if full_save:
+            model.zero_grad()
+            torch.save(model, save_path)
+        else:
+            torch.save(model.state_dict(), save_path)
 
     log.info(f"Model saved to {save_path}")
     return stats

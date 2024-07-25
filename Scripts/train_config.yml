@@ -1,0 +1,19 @@
+base_model:
+  model_name: "resnet18"
+
+  # Null or path to checkpoint
+  resume_path: Null
+
+  epochs: 20
+  image_size: 128
+  batch_size: 128
+
+  train_path: "train.h5"
+  test_path: "test.h5"
+  save_dir: "./"
+
+  preload_train: True
+  preload_test: True
+
+  evaluate: True
+  save_best: True

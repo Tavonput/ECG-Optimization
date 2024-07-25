@@ -24,7 +24,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class EcgDataset(Dataset):
     """
-    @class ECG Dataset
+    ECG Dataset
 
     ECG dataset from MIT-BIH transformed into images and loaded from a HDF5 file. To be used with PyTorch DataLoader.
 
@@ -62,8 +62,12 @@ class EcgDataset(Dataset):
                 log.warning("\tUsing too much memory. Disabling preload")
             else:
                 log.info("\tPreloading images and labels")
+                start_time = time.time()
                 self.preloaded_images = [i for i in self.images]
                 self.preloaded_labels = [l for l in self.labels]
+                end_time = time.time()
+
+                log.info(f"\tPreloading completed in {(end_time - start_time)}s")
 
 
     def __del__(self):

@@ -13,15 +13,16 @@ from .image_batcher import ImageBatcher
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
-logging.getLogger("ENG").setLevel(logging.INFO)
-log = logging.getLogger("ENG")
+logging.getLogger("TRTEG").setLevel(logging.INFO)
+log = logging.getLogger("TRTEG")
+
 
 #===========================================================================================================================
 # Calibration
 #
 class EngineCalibrator(trt.IInt8Calibrator):
     """
-    @class Engine Calibrator
+    Engine Calibrator
 
     Implementation of TensorRT IInt8Calibrator.
     """
@@ -43,7 +44,10 @@ class EngineCalibrator(trt.IInt8Calibrator):
         """
         Set the image batcher and allocate device memory for batching.
 
-        @param image_batcher: ImageBatcher.
+        Parameters
+        ----------
+        image_batcher : ImageBatcher
+            The ImageBatcher.
         """
         log.info(f"Setting image batcher and allocating {image_batcher.nbytes} bytes of device memory")
         self.image_batcher    = image_batcher
@@ -55,7 +59,10 @@ class EngineCalibrator(trt.IInt8Calibrator):
         Overrides from TensorRT IInt8Calibrator. 
         Get the algorithm used for calibration.
 
-        @return Calibration algorithm.
+        Returns
+        -------
+        algo : trt.CalibrationAlgoType
+            Calibration algorithm.
         """
         return self.algorithm
     
@@ -64,9 +71,15 @@ class EngineCalibrator(trt.IInt8Calibrator):
         """
         Overrides from TensorRT IInt8Calibrator.
 
-        @param names: Names of inputs. Not Used.
+        Parameters
+        ----------
+        names : list[str]
+            Names of inputs. Not Used.
 
-        @return List of device memory pointers.
+        Returns
+        -------
+        allocations : list[int]
+            List of device memory pointers.
         """
         if not self.image_batcher:
             return None
@@ -89,7 +102,10 @@ class EngineCalibrator(trt.IInt8Calibrator):
         Overrides from TensorRT IInt8Calibrator. 
         Get the batch size.
 
-        @return Batch size.
+        Returns
+        -------
+        size : int
+            Batch size.
         """
         if self.image_batcher:
             return self.image_batcher.batch_size
@@ -101,7 +117,10 @@ class EngineCalibrator(trt.IInt8Calibrator):
         Overrides from TensorRT IInt8Calibrator. 
         Read the calibration cache file.
 
-        @return Byte stream of calibration cache contents.
+        Returns
+        -------
+        stream : bytes
+            Byte stream of calibration cache contents.
         """
         if os.path.exists(self.cache_dir):
             with open(self.cache_dir, "rb") as file:
@@ -114,7 +133,10 @@ class EngineCalibrator(trt.IInt8Calibrator):
         Overrides from TensorRT IInt8Calibrator.
         Write calibration cache to disk.
 
-        @param cache: Byte stream content of the calibration cache.
+        Parameters
+        ----------
+        cache : bytes
+            Byte stream content of the calibration cache.
         """
         cache_root_dir = os.path.dirname(self.cache_dir)
         if not os.path.exists(cache_root_dir):
@@ -147,13 +169,18 @@ class CalibrationConfig:
     algorithm:   str
 
 
-def _parse_onnx(network, logger, onnx_path) -> None:
+def _parse_onnx(network: trt.INetworkDescription, logger: trt.ILogger, onnx_path: str) -> None:
     """
     Helper for parsing the ONNX model.
 
-    @param network: The TensorRT network that the ONNX model will be loaded into.
-    @param logger: The TensorRT logger.
-    @param onnx_path: The path to the ONNX model.
+    Parameters
+    ----------
+    network : trt.INetworkDescription
+        The TensorRT network that the ONNX model will be loaded into.
+    logger : trt.ILogger
+        The TensorRT logger.
+    onnx_path : str
+        The path to the ONNX model.
     """
     parser = trt.OnnxParser(network, logger)
 
@@ -174,15 +201,28 @@ def _parse_onnx(network, logger, onnx_path) -> None:
         log.info(f"Name: {output.name} - Type: {output.dtype} - Shape: {output.shape}")
 
 
-def _set_precision(builder, config, network, precision, calib_config: CalibrationConfig = None) -> None:
+def _set_precision(
+    builder:      trt.Builder, 
+    config:       trt.IBuilderConfig, 
+    network:      trt.INetworkDescription, 
+    precision:    str, 
+    calib_config: CalibrationConfig = None
+) -> None:
     """
     Helper for setting the precision implicitly.
 
-    @param builder: The TensorRT builder.
-    @param config: The TensorRT config for setting the precision.
-    @param network: The TensorRT Network. It should already be filled out by the ONNX parser.
-    @param precision: The precision to reduce to.
-    @param calib_config: The CalibrationConfig for INT8.
+    Parameters
+    ----------
+    builder : trt.Builder
+        The TensorRT builder.
+    config : trt.IBuilderConfig
+        The TensorRT config for setting the precision.
+    network : trt.INetworkDescription
+        The TensorRT Network. It should already be filled out by the ONNX parser.
+    precision : str
+        The precision to reduce to.
+    calib_config : CalibrationConfig
+        The CalibrationConfig for INT8.
     """
     config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
 
@@ -236,8 +276,12 @@ def _inspect_engine(engine_path: str, logger: trt.Logger) -> None:
     """
     Log detailed engine description with an inspector. Saves everything to engine_inspector_log.txt.
 
-    @param engine_path: Path to TensorRT engine.
-    @param logger: TensorRT logger.
+    Parameters
+    ----------
+    engine_path : str
+        Path to TensorRT engine.
+    logger : trt.Logger
+        TensorRT logger.
     """
     runtime = trt.Runtime(logger)
     assert runtime
@@ -267,10 +311,16 @@ def build_engine(
     """
     Build a TensorRT engine.
 
-    @param onnx_path: Path to ONNX model.
-    @param engine_path: Path to save the engine.
-    @param precision: Model precision.
-    @param calib_config: CalibrationConfig.
+    Parameters
+    ----------
+    onnx_path : str
+        Path to ONNX model.
+    engine_path : str
+        Path to save the engine.
+    precision : str
+        Model precision.
+    calib_config : CalibrationConfig
+        CalibrationConfig.
 
     TODO: 
     - Get dynamic batching to work. 

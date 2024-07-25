@@ -9,7 +9,7 @@ import numpy as np
 
 @dataclass
 class Buffer:
-    host:   np.array
+    host:   np.ndarray
     device: int
     shape:  tuple
     size:   int
@@ -28,7 +28,7 @@ class TrtContext:
 
 class DebugListener(trt.IDebugListener):
     """
-    @class Debug Listener
+    Debug Listener
 
     TensorRT IDebugListener implementation.
     """
@@ -43,10 +43,17 @@ def create_trt_context(engine_path: str, log_level: trt.ILogger.Severity = trt.L
     """
     Setup all of the TensorRT stuff for inference.
 
-    @param engine_path: Path to TensorRT engine.
-    @param log_level: Severity level for logging. 
+    Parameters
+    ----------
+    engine_path : str
+        Path to TensorRT engine.
+    log_level : trt.ILogger.Severity
+        Severity level for logging. 
 
-    @return TrtContext containing all inference objects.
+    Returns
+    -------
+    context : TrtContext
+        TrtContext containing all inference objects.
 
     TODO: Don't use trt severity as an input. The user should not need to know about trt severity enums.
     """
@@ -78,10 +85,19 @@ def allocate_buffers(engine: trt.ICudaEngine, data_type:np.dtype) -> tuple[list[
     """
     Allocate IO buffers. Host memory is pagelocked.
 
-    @param engine: TensorRT engine.
-    @param data_type: Numpy dtype used for memory allocation.
+    Parameters
+    ----------
+    engine : trt.ICudaEnging
+        TensorRT engine.
+    data_type : np.dtype
+        Numpy dtype used for memory allocation.
 
-    @return IO buffers.
+    Returns
+    -------
+    inputs : list[Buffer]
+        Input buffers.
+    outputs : list[Buffer]
+        Output buffers
     """
     inputs = []
     outputs = []
@@ -108,12 +124,16 @@ def allocate_buffers(engine: trt.ICudaEngine, data_type:np.dtype) -> tuple[list[
     return inputs, outputs
 
 
-def copy_data_to_host_buffer(buffer: Buffer, data: np.array) -> None:
+def copy_data_to_host_buffer(buffer: Buffer, data: np.ndarray) -> None:
     """
     Copy data into the host memory of a buffer.
 
-    @param buffer: Buffer to transfer data into.
-    @param data: Data to transfer.
+    Parameters
+    ----------
+    buffer : Buffer
+        Buffer to transfer data into.
+    data : np.ndarray
+        Data to transfer.
     """
     assert data.size == buffer.host.size
     np.copyto(buffer.host, np.ascontiguousarray(data.flat))
@@ -123,9 +143,14 @@ def inference(trt_cxt: TrtContext, inputs: list[Buffer], outputs: list[Buffer]) 
     """
     Inference a TensorRT engine.
 
-    @param trt_cxt: TrtContext built on the engine to inference.
-    @param inputs: Input Buffers.
-    @param outputs: Output Buffers
+    Parameters
+    ----------
+    trt_cxt : TrtContext
+        TrtContext built on the engine to inference.
+    inputs : list[Buffer]
+        Input Buffers.
+    outputs : list[Buffer]
+        Output Buffers
     """
     # Inputs: Host => Device
     [cuda.memcpy_htod_async(inp.device, inp.host, trt_cxt.stream) for inp in inputs]
