@@ -358,7 +358,7 @@ def plot_xy_pair(
     Parameters
     ----------
     values : dict{str, list[tuple]}
-        Dictionary containing labels and points {name : list of (x, y)}.
+        Dictionary containing labels and points {name ; list of (x, y)}.
     config : PlotConfig
         PlotConfig.
     """
@@ -379,6 +379,35 @@ def plot_xy_pair(
     ax.set_ylabel(config.y_label)
     ax.set_title(config.title)
     ax.legend()
+    plt.show()
+
+
+def plot_scatter(
+    values:   list[tuple],
+    config:   PlotConfig,
+    callback: Callable = None,
+    **kwargs
+) -> None:
+    """
+    """
+    sns.set_style("whitegrid")
+    sns.set_palette("husl")
+    _, ax = plt.subplots(figsize=config.fig_size)
+
+    x = [point[0] for point in values]
+    y = [point[1] for point in values]
+
+    ax.scatter(x, y)
+
+    ax.set_ylim(config.y_range)
+    ax.set_xlim(config.x_range)
+    ax.set_xlabel(config.x_label)
+    ax.set_ylabel(config.y_label)
+    ax.set_title(config.title)
+
+    if callback is not None:
+        callback(ax, config, **kwargs)
+
     plt.show()
 
 
@@ -421,6 +450,7 @@ def plot_bar_grouped(groups: GroupedValues, config: PlotConfig, callback: Callab
 
     ax.set_xticklabels(labels)
 
+    ax.set_ylabel(config.y_label)
     ax.set_ylim(config.y_range)
     ax.grid(False, axis="x")
     ax.set_title(config.title)
@@ -465,7 +495,7 @@ def visualize_image_from_numpy(image: np.ndarray, transpose: bool = False, singl
 #===========================================================================================================================
 # Plot Helpers
 #
-def set_black_border(ax: plt.Axes) -> None:
+def set_black_border(ax: plt.Axes, config: PlotConfig = None) -> None:
     """
     Set the border of the plot black.
 

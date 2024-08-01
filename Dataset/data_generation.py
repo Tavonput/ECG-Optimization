@@ -144,8 +144,8 @@ def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, i
 
     Returns
     -------
-    distribution : dict {str : int | float}
-        Class distribution in the form of a dictionary (class name : count/ratio).
+    distribution : dict {str ; int|float}
+        Class distribution in the form of a dictionary (class name ; count/ratio).
     """
     num_labels = len(labels)
 

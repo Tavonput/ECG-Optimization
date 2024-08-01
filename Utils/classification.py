@@ -42,19 +42,24 @@ class TrainingStats:
     stats.running_accuracy.append(new_accuracy)
 
     # After training...
-    stats.training_time = training_time
+    stats.total_train_time = training_time
     stats.serialize("stats.txt")
     stats.deserialize("stats.txt")
     ```
     """
-    def __init__(self, from_save: str = None) -> None:
-        self.best_accuracy    = 0.0
-        self.running_accuracy = []
+    CURRENT_VERSION = 2
 
+    def __init__(self, from_save: str = None) -> None:
+        self.version = TrainingStats.CURRENT_VERSION
+
+        self.best_accuracy    = 0.0
+        self.total_train_time = 0.0
+
+        self.running_accuracy   = []
+        self.running_loss       = []
         self.running_train_time = []
         self.running_epoch_time = []
-        self.total_train_time   = 0.0
-
+        
         self.epochs = 0
 
         if from_save is not None:
@@ -67,12 +72,14 @@ class TrainingStats:
             os.mkdir(path_dir)
 
         with open(path, "w") as file:
+            file.write(f"{self.version}\n")
             file.write(f"{self.best_accuracy}\n")
             file.write(f"{self.running_accuracy}\n")
             file.write(f"{self.running_train_time}\n")
             file.write(f"{self.running_epoch_time}\n")
-            file.write(f"{self.training_time}\n")
-            file.write(f"{self.epochs}")
+            file.write(f"{self.total_train_time}\n")
+            file.write(f"{self.epochs}\n")
+            file.write(f"{self.running_loss}")
     
 
     def deserialize(self, path: str) -> None:
@@ -82,12 +89,38 @@ class TrainingStats:
 
         with open(path, "r") as file:
             lines = file.readlines()
-            self.best_accuracy      = float(lines[0].strip())
-            self.running_accuracy   = ast.literal_eval(lines[1].strip())
-            self.running_train_time = ast.literal_eval(lines[2].strip())
-            self.running_epoch_time = ast.literal_eval(lines[3].strip())
-            self.training_time      = float(lines[4].strip())
-            self.epochs             = int(lines[5].strip())
+
+            self.version = int(float(lines[0].strip()))
+            if self.version != TrainingStats.CURRENT_VERSION:
+                log.warning(f"{path} is not in up to date. Current: {self.version}, Newest: {TrainingStats.CURRENT_VERSION}")
+
+            match self.version:
+                case 1: 
+                    self._deserialize_v1(path)
+                case 2: 
+                    self._deserialize_v2(path)
+                case _:
+                    log.error(f"Version {self.version} is not supported")
+                
+
+    def _deserialize_v1(self, path: str) -> None:
+        with open(path, "r") as file:
+            lines = file.readlines()
+
+            self.best_accuracy      = float(lines[1].strip())
+            self.running_accuracy   = ast.literal_eval(lines[2].strip())
+            self.running_train_time = ast.literal_eval(lines[3].strip())
+            self.running_epoch_time = ast.literal_eval(lines[4].strip())
+            self.total_train_time   = float(lines[5].strip())
+            self.epochs             = int(lines[6].strip())
+
+
+    def _deserialize_v2(self, path: str) -> None:
+        self._deserialize_v1(path)
+
+        with open(path, "r") as file:
+            lines = file.readlines()
+            self.running_loss = ast.literal_eval(lines[7].strip())
 
 
     def display(self):
@@ -96,17 +129,79 @@ class TrainingStats:
         log.info(f"\tRunning Accuracy:   {self.running_accuracy}")
         log.info(f"\tRunning Train Time: {self.running_train_time}")
         log.info(f"\tRunning Epoch Time: {self.running_epoch_time}")
-        log.info(f"\tTraining Time:      {self.training_time}")
+        log.info(f"\tTraining Time:      {self.total_train_time}")
         log.info(f"\tEpochs:             {self.epochs}")
 
 
 class EvaluationStats:
-    def __init__(self) -> None:
+    """
+    EvaluationStats stores evaluation statistics and provides functions for serializing and deserializing the stats.
+
+    Parameters
+    ----------
+    from_save : str
+        A path to a serialized TrainingStats to load from.
+    """
+    CURRENT_VERSION = 1
+
+    def __init__(self, from_save: str = None) -> None:
+        self.version = EvaluationStats.CURRENT_VERSION
+
         self.accuracy:           float = 0.0
         self.per_class_accuracy: dict[str, float] = {}
         self.precision:          dict[str, float] = {}
         self.recall:             dict[str, float] = {}
         self.f1_score:           dict[str, float] = {}
+
+        if from_save is not None:
+            self.deserialize(from_save)
+
+
+    def serialize(self, path: str) -> None:
+        path_dir = os.path.dirname(path)
+        if not os.path.exists(path_dir):
+            os.mkdir(path_dir)
+
+        with open(path, "w") as file:
+            file.write(f"{self.version}\n")
+            file.write(f"{self.accuracy}\n")
+            file.write(f"{self.per_class_accuracy}\n")
+            file.write(f"{self.precision}\n")
+            file.write(f"{self.recall}\n")
+            file.write(f"{self.f1_score}\n")
+
+
+    def deserialize(self, path: str) -> None:
+        if not os.path.exists(path):
+            log.error(f"{path} does not exist")
+            return
+        
+        with open(path, "r") as file:
+            lines = file.readlines()
+
+            self.version = int(lines[0].strip())
+            if self.version != EvaluationStats.CURRENT_VERSION:
+                log.warning(f"{path} is not in up to date")
+                log.warning(f"\tNewest Version:  {EvaluationStats.CURRENT_VERSION}")
+                log.warning(f"\tCurrent Version: {self.version}")
+
+            match self.version:
+                case 1: 
+                    self._deserialize_v1(path)
+                case _:
+                    log.error(f"{self.version} is not supported")
+
+
+    def _deserialize_v1(self, path: str) -> None:
+        with open(path, "r") as file:
+            lines = file.readlines()
+
+            self.accuracy           = float(lines[1].strip())
+            self.per_class_accuracy = ast.literal_eval(lines[2].strip())
+            self.precision          = ast.literal_eval(lines[3].strip())
+            self.recall             = ast.literal_eval(lines[4].strip())
+            self.f1_score           = ast.literal_eval(lines[5].strip())
+
 
     def display(self):
         log.info("Displaying EvaluationStats")
@@ -126,7 +221,7 @@ def train(
     criterion:  nn.Module,
     optimizer:  Optimizer,
     scheduler:  LambdaLR
-) -> None:
+) -> list:
     """
     Train a model for one epoch.
 
@@ -142,8 +237,15 @@ def train(
         Optimizer.
     scheduler : LambdaLR
         Scheduler.
+    
+    Returns
+    -------
+    loss : list
+        The running loss.
     """
     model.train()
+
+    running_loss = []
 
     for inputs, labels in tqdm(dataloader, desc="Train", leave=False):
         inputs = inputs.to(device)
@@ -152,12 +254,16 @@ def train(
         optimizer.zero_grad()
 
         outputs = model(inputs)
+
         loss = criterion(outputs, labels)
+        running_loss.append(loss.item())
 
         loss.backward()
 
         optimizer.step()
         scheduler.step()
+
+    return running_loss
 
 
 @torch.inference_mode()
@@ -254,18 +360,13 @@ def evaluate_per_class(
         total_samples += labels.size(0)
         total_correct += (outputs == labels).sum()
 
-    per_class_accuracy = (correct_samples_per_class / total_samples_per_class) * 100
-
+    per_class_accuracy       = (correct_samples_per_class / total_samples_per_class) * 100
     stats.per_class_accuracy = {f"class_{i}": per_class_accuracy[i].item() for i in range(num_classes)}
     stats.accuracy           = (total_correct / total_samples * 100).item()
 
-    precision = correct_samples_per_class / (correct_samples_per_class + false_positives)
-    recall    = correct_samples_per_class / (correct_samples_per_class + false_negatives)
-    f1_score  = 2 * (precision * recall) / (precision + recall) 
-
-    stats.precision = {f"class_{i}": precision[i].item() for i in range(num_classes)}
-    stats.recall    = {f"class_{i}": recall[i].item() for i in range(num_classes)}
-    stats.f1_score  = {f"class_{i}": f1_score[i].item() for i in range(num_classes)}
+    stats.precision = {f"class_{i}": precision(correct_samples_per_class[i].item(), false_positives[i].item()) for i in range(num_classes)}
+    stats.recall    = {f"class_{i}": recall(correct_samples_per_class[i].item(), false_negatives[i].item()) for i in range(num_classes)}
+    stats.f1_score  = {f"class_{i}": f1_score(stats.precision[f"class_{i}"], stats.recall[f"class_{i}"]) for i in range(num_classes)}
 
     return stats
 
@@ -339,10 +440,11 @@ def finetune(
         epoch_start_time = time.time()
 
         train_start_time = time.time()
-        train(model, dataloader["train"], criterion, optimizer, scheduler)
-        train_end_time = time.time()
+        running_loss     = train(model, dataloader["train"], criterion, optimizer, scheduler)
+        train_end_time   = time.time()
 
         stats.running_train_time.append(train_end_time - train_start_time)
+        stats.running_loss.append(running_loss)
 
         if do_eval:
             accuracy = evaluate(model, dataloader["test"])
@@ -369,7 +471,7 @@ def finetune(
                 "model_state_dict":     model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
-                "epoch":                epoch,
+                "epoch":                epoch + 1,
             }
             torch.save(checkpoint, f"{safety_dir}/check_{epoch+1}.pth")
             log.info(f"\tSaved epoch {epoch+1} to {safety_dir}/check_{epoch+1}.pth")
@@ -377,7 +479,7 @@ def finetune(
     end_time = time.time()
     log.info("Finetuning completed")
 
-    stats.training_time = end_time - start_time
+    stats.total_train_time = end_time - start_time
 
     if do_eval and save_best:
         if full_save:
@@ -416,3 +518,24 @@ def warm_up_dataloader(dataloader, num_batches: int = 0) -> None:
             if i >= num_batches:
                 break
             i += 1
+
+
+def precision(tp: float, fp: float) -> float:
+    """
+    Compute precision.
+    """
+    return tp / (tp + fp) if (tp + fp) > 0.0 else 0.0
+
+
+def recall(tp: float, fn: float) -> float:
+    """
+    Compute recall.
+    """
+    return tp / (tp + fn) if (tp + fn) > 0.0 else 0.0
+
+
+def f1_score(precision: float, recall: float) -> float:
+    """
+    Compute f1 score.
+    """
+    return 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0.0 else 0.0

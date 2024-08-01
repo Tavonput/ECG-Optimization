@@ -159,7 +159,8 @@ def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load
             model, _ = ofa_specialized_get("pixel1_lat@20ms_top1@71.4_finetune@25", pretrained=True)
             model.classifier.linear = nn.Linear(1280, num_classes)
 
-    model.load_state_dict(torch.load(path))
+    checkpoint = torch.load(path, weights_only=True)
+    model.load_state_dict(checkpoint["model_state_dict"])
     return model
 
 

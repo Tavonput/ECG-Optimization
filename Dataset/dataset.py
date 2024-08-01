@@ -2,6 +2,7 @@ import time
 import random
 import h5py
 import logging
+import os
 
 import torch
 
@@ -146,7 +147,7 @@ def build_dataloader(
     preload_test:   bool = False,
     half_precision: bool = False,
     max_memory:     float = 0.95
-) -> dict[str, DataLoader]:
+) -> dict[str, DataLoader] | None:
     """
     Build the train and test dataloaders from EcgDataset.
 
@@ -171,13 +172,21 @@ def build_dataloader(
         
     Returns
     -------
-    dataloaders : dict {str : DataLoader}
+    dataloaders : dict {str , DataLoader}
         Dictionary containing two entries:
             "train": Training dataloader
             "test":  Testing dataloader
-
-    TODO: Transforms provided by the user should be a list of transforms rather than just one.
+    None
+        None if dataloader creation fails.
     """
+    if not os.path.exists(train_path):
+        log.error(f"{train_path} does not exist")
+        return None
+
+    if not os.path.exists(test_path):
+        log.error(f"{test_path} does not exist")
+        return None
+
     if transform is None:
         trans = Compose([ToTensor()])
     elif isinstance(transform, list):
