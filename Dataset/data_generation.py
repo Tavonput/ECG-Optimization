@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 
+from scipy.signal import resample
 from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
 import cv2
 
@@ -372,6 +373,26 @@ def crop_images(images: np.ndarray, size: int) -> np.ndarray:
     return resized_images
 
 
+def resample_signal(signals: np.ndarray, size: int) -> np.ndarray:
+    """
+    Resample a signal using 'resample' for scipy. Input must be of shape (b, s).
+
+    Parameters
+    ----------
+    signals : np.ndarray
+        The original signals of shape (b, s).
+
+    size : int
+        The new size.
+    
+    Returns
+    ------
+    signals : np.ndarray
+        The resampled signals.
+    """
+    return resample(signals, size, axis=1)
+
+
 #===========================================================================================================================
 # Dataset Creation
 #
@@ -610,9 +631,10 @@ def create_image_dataset_contiguous(signal_dataset_path: str, output_path: str, 
     log.info(f"\tTotal:      {num_samples}")
     log.info(f"\tPreprocess: {preprocess}")
     log.info(f"\tImage Size: {image_size}")
-
+    
+    log.info(f"\tBegin transformation...")
     for i, batch in enumerate(batches):
-        log.info(f"\tProcessing batch {i + 1}/{len(batches)}")
+        log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
         start_time = time.time()
 
         batch_images = signal_to_image(segments[current_idx : (current_idx + batch)])
@@ -629,7 +651,7 @@ def create_image_dataset_contiguous(signal_dataset_path: str, output_path: str, 
             images[current_idx : (current_idx + batch)] = batch_images
 
         end_time = time.time()
-        log.info(f"\tCompleted batch in {(end_time - start_time):.4f}s")
+        log.info(f"\t\tCompleted batch in {(end_time - start_time):.4f}s")
 
         current_idx += batch
 
@@ -879,12 +901,13 @@ def create_preprocessed_dataset(
     dataset_path: str, 
     output_path:  str,
     data_key:     str,
+    data_type:    str,
     method:       str,
     new_size:     int,
     batch_size:   int
 ) -> None:
     """
-    Create a resized or center cropped version of a dataset.
+    Create a preprocessed version of a dataset.
 
     Parameters
     ----------
@@ -894,8 +917,10 @@ def create_preprocessed_dataset(
         The path to the output dataset.
     data_key : str
         The key of the main data stored in the original hdf5 dataset.
+    data_type : str
+        The type of input, either 'image' or 'signal'.
     method : str
-        The preprocessing method, either 'resize' or 'crop'.
+        The preprocessing method, either 'resize', 'crop', or 'resample'.
     new_size : int
         The new size after preprocessing.
     batch_size : int
@@ -912,11 +937,17 @@ def create_preprocessed_dataset(
     original_dataset = h5py.File(dataset_path, "r")
     original_data    = original_dataset[data_key]
     original_labels  = original_dataset["labels"]
+    num_samples      = original_data.shape[0]
 
     original_data_shape = list(original_data.shape[1:])
-    new_data_shape      = [original_data_shape[0], new_size, new_size]
-    num_samples         = original_data.shape[0]
-
+    if data_type == "image":
+        new_data_shape = [original_data_shape[0], new_size, new_size]
+    elif data_type == "signal":
+        new_data_shape = [new_size]
+    else:
+        log.error(f"'{data_type}' is not supported")
+        return
+        
     log.info(f"Generating preprocessed dataset from {dataset_path}")
     log.info(f"\tMethod:   {method}")
     log.info(f"\tTotal:    {num_samples}")
@@ -961,6 +992,8 @@ def create_preprocessed_dataset(
                 new_batch_data = resize_images(batch_data, new_size)
             elif method == "crop":
                 new_batch_data = crop_images(batch_data, new_size)
+            elif method == "resample":
+                new_batch_data = resample_signal(batch_data, new_size)
             else:
                 log.error(f"{method} is not supported")
                 original_dataset.close()

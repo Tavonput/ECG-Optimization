@@ -68,6 +68,13 @@ class TestDataGeneration(unittest.TestCase):
         indices = random_subset(1000, 0.4, shuffle=True)
         self.assertEqual(len(indices), 400)
     
+
+    def test_resample_signal(self):
+        dummy_input = np.random.randn(3, 1000)
+
+        dummy_output = resample_signal(dummy_input, 500)
+        self.assertEqual(dummy_output.shape, (3, 500))
+
     
 if __name__ == "__main__":
     unittest.main()

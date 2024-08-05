@@ -86,7 +86,7 @@ def get_classifier(name: str, model: nn.Module) -> nn.Module:
             return model.fc
         
 
-def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load: bool = False) -> nn.Module:
+def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load: bool = False, from_safety: bool = False) -> nn.Module:
     """
     Load a torchvision vision model from a state dict checkpoint. The final layer output will be replaced 
     with the specified number of classes.
@@ -101,6 +101,8 @@ def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load
         Number of classes the final layer should output.
     full_load : bool
         Load the model from a full save.
+    from_safety : bool
+        If the model was saved using the safety system.
 
     Returns
     -------
@@ -160,7 +162,11 @@ def load_model_from_pretrained(name: str, path: str, num_classes: int, full_load
             model.classifier.linear = nn.Linear(1280, num_classes)
 
     checkpoint = torch.load(path, weights_only=True)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    if from_safety:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+        
     return model
 
 

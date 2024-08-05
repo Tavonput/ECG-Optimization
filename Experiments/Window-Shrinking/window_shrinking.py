@@ -37,25 +37,24 @@ def window_shrinking(
 
     TrainConfig  = namedtuple("TrainConfig", ["window_size", "ratio", "epochs", "batch_size"])
     train_config = [
-        TrainConfig(256, 0.3, 10, 128),
+        # TrainConfig(256, 0.3, 10, 128),
         TrainConfig(224, 0.3, 10, 128),
         TrainConfig(192, 0.4, 10, 128),
         TrainConfig(160, 0.5, 10, 128),
         TrainConfig(128, 1.0, 30, 128),
     ]
-    method = "balance"
 
     for config in train_config:
         log.info(f"Window Size {config.window_size}")
 
         if config.window_size == 128:
-            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_unfiltered_i{config.window_size}_train.h5"
+            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_resample_i{config.window_size}_train.h5"
         else:
-            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_unfiltered_i{config.window_size}_train_r{config.ratio}_{method}.h5"
+            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_resample_i{config.window_size}_train_r{config.ratio}.h5"
 
         dataloader = build_dataloader(
             train_path    = train_path,
-            test_path     = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_unfiltered_i128_test.h5",
+            test_path     = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_test.h5",
             transform     = None,
             batch_size    = config.batch_size,
             preload_train = True,
@@ -98,7 +97,7 @@ def window_shrinking_multi_set(
 
     TrainConfig  = namedtuple("TrainConfig", ["window_size", "num_sets", "epochs", "batch_size"])
     train_config = [
-        TrainConfig(256, 1, 10, 128),
+        # TrainConfig(256, 1, 10, 128),
         TrainConfig(224, 1, 10, 128),
         TrainConfig(192, 1, 10, 128),
         TrainConfig(160, 1, 10, 128),
@@ -109,7 +108,7 @@ def window_shrinking_multi_set(
         for s in range(config.num_sets):
             log.info(f"Window Size {config.window_size} - Set {s}")
 
-            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_unfiltered_i{config.window_size}_train.h5"
+            train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_resample_i{config.window_size}_train.h5"
             # if config.window_size == 128:
             #     train_path = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-{config.window_size}/image_unfiltered_i{config.window_size}_train.h5"
             # else:
@@ -117,7 +116,7 @@ def window_shrinking_multi_set(
 
             dataloader = build_dataloader(
                 train_path    = train_path,
-                test_path     = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_unfiltered_i128_test.h5",
+                test_path     = f"../../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_test.h5",
                 transform     = None,
                 batch_size    = config.batch_size,
                 preload_train = (config.window_size == 128),
@@ -147,17 +146,16 @@ def window_shrinking_multi_set(
 # Main
 #
 def main():
-    for i in range(4, 6):
-        window_shrinking(
-            model_name    = "resnet18",
-            save_dir_root = f"../../Pretrained/ECG-Raw/Window-Shrinking/Base/Step-32/V{i}",
-            resume        = None,
-        )
+    window_shrinking(
+        model_name    = "resnet18",
+        save_dir_root = "../../Pretrained/ECG-Raw/Window-Shrinking/balance/Step-32/Resample",
+        resume        = "../../Pretrained/ECG-Raw/Window-Shrinking/balance/Step-32/V1/resnet18_ep10_i256_r0.3/resnet18_ep10_i256_r0.3.pth",
+    )
 
     # window_shrinking_multi_set(
     #     model_name    = "resnet18",
-    #     save_dir_root = "../../Pretrained/ECG-Raw/Window-Shrinking/Full",
-    #     resume        = None,
+    #     save_dir_root = "../../Pretrained/ECG-Raw/Window-Shrinking/Full/Resample",
+    #     resume        = "../../Pretrained/ECG-Raw/Window-Shrinking/Full/resnet18_ep10_i256/resnet18_ep10_i256.pth",
     # )
 
 

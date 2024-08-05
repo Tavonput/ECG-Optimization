@@ -4,13 +4,13 @@ base_model:
   # Null or path to checkpoint
   resume_path: Null
 
-  epochs: 20
+  epochs: 50
   image_size: 128
   batch_size: 128
 
-  train_path: "train.h5"
-  test_path: "test.h5"
-  save_dir: "./"
+  train_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_train.h5"
+  test_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_test.h5"
+  save_dir: "../Pretrained/ECG-Raw/Base/Resample"
 
   preload_train: True
   preload_test: True
