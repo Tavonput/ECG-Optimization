@@ -6,7 +6,7 @@ import wfdb
 import logging
 import os
 import time
-from typing import Union
+from typing import Union, Tuple, List, Dict
 
 import numpy as np
 
@@ -100,7 +100,7 @@ def segment_heartbeat(signal: np.ndarray, peak: int, window_size: int) -> Union[
     return None
 
 
-def process_record(record_path: str, window_size: int) -> tuple[list, list]:
+def process_record(record_path: str, window_size: int) -> Tuple[List, List]:
     """
     Process a record given a window size.
 
@@ -113,7 +113,7 @@ def process_record(record_path: str, window_size: int) -> tuple[list, list]:
 
     Returns
     -------
-    segments : list, list
+    segments : List, List
         Array of heartbeat segments and an array of labels.
     """
     record     = wfdb.rdrecord(record_path)
@@ -138,20 +138,20 @@ def process_record(record_path: str, window_size: int) -> tuple[list, list]:
     return np.array(heartbeats), np.array(labels_idx)
 
 
-def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, Union[int, float]]:
+def get_class_distribution(labels: List, normalize: bool = False) -> Dict[str, Union[int, float]]:
     """
     Get the class distribution of a list of labels.
 
     Parameters
     ----------
-    labels : list
+    labels : List
         List of labels.
     normalize : bool
         Whether or not to normalize the distribution.
 
     Returns
     -------
-    distribution : dict {str ; int|float}
+    distribution : Dict {str ; int|float}
         Class distribution in the form of a dictionary (class name ; count/ratio).
     """
     num_labels = len(labels)
@@ -166,7 +166,7 @@ def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, U
     return counts
 
 
-def batch_value(value: int, batch_size: int) -> list[int]:
+def batch_value(value: int, batch_size: int) -> List[int]:
     """
     Calculate batching. For example if value is 33 and the batch size is 10, the corresponding batching will be [10, 10, 10, 3].
 
@@ -179,7 +179,7 @@ def batch_value(value: int, batch_size: int) -> list[int]:
 
     Returns
     -------
-    batches : list[int]
+    batches : List[int]
         Batching list.
     """
     full_batches = [batch_size] * (value // batch_size)
@@ -218,7 +218,7 @@ def signal_to_image(signals: np.ndarray) -> np.ndarray:
     return images.transpose(1, 0, 2, 3) # (batch_size, 3, width, height)
 
 
-def split_value(value: int, ratio: float, shuffle: bool) -> tuple[list[int], list[int]]:
+def split_value(value: int, ratio: float, shuffle: bool) -> Tuple[List[int], List[int]]:
     """
     Split a value by a ratio into indices. For example, a value of 5 with a ratio of 0.6 will results in two lists:
     [0, 1, 2] and [3, 4].
@@ -234,7 +234,7 @@ def split_value(value: int, ratio: float, shuffle: bool) -> tuple[list[int], lis
 
     Returns
     -------
-    indices : list[int], list[int]
+    indices : List[int], List[int]
         Two indices lists.
     """
     indices = np.arange(value)
@@ -249,7 +249,7 @@ def split_value(value: int, ratio: float, shuffle: bool) -> tuple[list[int], lis
     return train_split, test_split
 
 
-def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -> Union[list[int], None]:
+def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -> Union[List[int], None]:
     """
     Given an array of labels, create a subset by only removing instances of the normal label.
 
@@ -264,7 +264,7 @@ def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -
     
     Returns
     -------
-    indices : list[int] | None
+    indices : List[int] | None
         The indices of labels to keep or None if too many normals were attempted to remove.
     """
     num_labels         = len(labels)
@@ -286,7 +286,7 @@ def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -
     return indices_to_keep
 
 
-def random_subset(value: int, ratio: float, shuffle: bool) -> list[int]:
+def random_subset(value: int, ratio: float, shuffle: bool) -> List[int]:
     """
     Randomly select some ratio of indices from a value. If the value is high enough, the random sampling should be maintain
     the original distribution.
@@ -302,7 +302,7 @@ def random_subset(value: int, ratio: float, shuffle: bool) -> list[int]:
 
     Returns
     -------
-    indices : list[int]
+    indices : List[int]
         The indices.
     """
     indices = np.arange(value)
@@ -539,13 +539,13 @@ class DatasetHelper:
         self.size       = self.data.shape[0]
 
 
-    def collect_samples(self, indices: list, contiguous: bool) -> tuple:
+    def collect_samples(self, indices: List, contiguous: bool) -> Tuple:
         """
         Collect samples from the dataset given a set of indices.
 
         Parameters
         ----------
-        indices : list
+        indices : List
             The list of indices.
         contiguous : bool
             Is the list of indices ordered.

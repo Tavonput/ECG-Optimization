@@ -3,6 +3,7 @@ import os
 import copy
 import logging
 import ast
+from typing import List, Dict
 
 import torch
 import torch.nn as nn
@@ -148,10 +149,10 @@ class EvaluationStats:
         self.version = EvaluationStats.CURRENT_VERSION
 
         self.accuracy:           float = 0.0
-        self.per_class_accuracy: dict[str, float] = {}
-        self.precision:          dict[str, float] = {}
-        self.recall:             dict[str, float] = {}
-        self.f1_score:           dict[str, float] = {}
+        self.per_class_accuracy: Dict[str, float] = {}
+        self.precision:          Dict[str, float] = {}
+        self.recall:             Dict[str, float] = {}
+        self.f1_score:           Dict[str, float] = {}
 
         if from_save is not None:
             self.deserialize(from_save)
@@ -221,7 +222,7 @@ def train(
     criterion:  nn.Module,
     optimizer:  Optimizer,
     scheduler:  LambdaLR
-) -> list:
+) -> List:
     """
     Train a model for one epoch.
 
@@ -240,7 +241,7 @@ def train(
     
     Returns
     -------
-    loss : list
+    loss : List
         The running loss.
     """
     model.train()
@@ -374,7 +375,7 @@ def evaluate_per_class(
 def finetune(
     model:       nn.Module,
     epochs:      int,
-    dataloader:  dict[str, DataLoader],
+    dataloader:  Dict[str, DataLoader],
     save_path:   str,
     lr:          float = 0.01,
     safety:      int   = 0,
@@ -392,7 +393,7 @@ def finetune(
         Model to finetune.
     epochs : int
         Number of epochs to finetune.
-    dataloader : dict {str : DataLoader}
+    dataloader : Dict {str : DataLoader}
         Both train and test loaders in dict {name, DataLoader}.
     save_path : str
         Where to save the model. 

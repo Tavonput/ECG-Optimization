@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from collections import namedtuple, defaultdict
-from typing import Callable, Union
+from typing import Callable, Union, Tuple, List, Dict
 
 import numpy as np
 import seaborn as sns
@@ -24,13 +24,13 @@ from .classification import TrainingStats
 @dataclass
 class PlotConfig:
     title:   str  = "Title"
-    legend:  list = field(default_factory=list)
+    legend:  List = field(default_factory=List)
 
     x_label: str = "x-axis"
     y_label: str = "y-axis"
 
-    x_range: tuple = None
-    y_range: tuple = None
+    x_range: Tuple = None
+    y_range: Tuple = None
 
     x_scale: str = "linear"
     y_scale: str = "linear"
@@ -38,7 +38,7 @@ class PlotConfig:
     x_grid: bool = True
     y_grid: bool = True
 
-    fig_size: tuple = (10, 4)
+    fig_size: Tuple = (10, 4)
 
 
 class GroupedValues:
@@ -51,7 +51,7 @@ class GroupedValues:
     Entry = namedtuple("Entry", ["value", "error"])
 
     def __init__(self) -> None:
-        self.groups = defaultdict(list)
+        self.groups = defaultdict(List)
 
 
     def is_empty(self) -> bool:
@@ -97,23 +97,23 @@ class GroupedValues:
 # Specific Plots and Tables
 #
 def compare_models(
-    models_stats: list[ModelStats], 
+    models_stats: List[ModelStats], 
     show_macs:    bool = True, 
     show_params:  bool = True,
-    fig_size:     tuple = (10, 4)
+    fig_size:     Tuple = (10, 4)
 ) -> None:
     """
     Compare a list of ModelStats displayed with a bar graphs.
 
     Parameters
     ----------
-    model_stats : list[ModelStats]
+    model_stats : List[ModelStats]
         List of ModelStats to compare.
     show_macs : bool
         Whether or not to show the MACs plot.
     show_params : bool
         Whether or not to show the params plot.
-    fig_size : tuple(int, int)
+    fig_size : Tuple(int, int)
         Figure size of the plots.
     """
     sns.set_style("whitegrid")
@@ -170,17 +170,17 @@ def display_model_stats(model_stats: ModelStats) -> None:
     print(f"MACs:     {round(model_stats.macs / 1e6)} M")
 
 
-def display_training_stat_table(stats: list[TrainingStats], base: TrainingStats, names: list[str], title: str, base_discard: int = 20) -> None:
+def display_training_stat_table(stats: List[TrainingStats], base: TrainingStats, names: List[str], title: str, base_discard: int = 20) -> None:
     """
     Display a table of different training stats compared against a baseline.
 
     Parameters
     ----------
-    stats : list[TrainingStats]
+    stats : List[TrainingStats]
         The list of training stats.
     base : TrainingStats
         The baseline training stats.
-    names : list[str]
+    names : List[str]
         The list of names for each training stats.
     title : str
         The title of the table.
@@ -204,7 +204,7 @@ def display_training_stat_table(stats: list[TrainingStats], base: TrainingStats,
 # Generic Plots
 #
 def plot_bar(
-    values:     dict[str, Union[float, int]],
+    values:     Dict[str, Union[float, int]],
     config:     PlotConfig,
     horizontal: bool = True,
 ) -> None:
@@ -213,7 +213,7 @@ def plot_bar(
 
     Parameters
     ----------
-    values : dict[str, float|int]
+    values : Dict[str, float|int]
         Dictionary of {names : values}.
     config : PlotConfig
         The plotting config.
@@ -267,7 +267,7 @@ def plot_bar(
 
 
 def plot_bar_error(
-    values:     dict[str, tuple[Union[float, int], float]],
+    values:     Dict[str, Tuple[Union[float, int], float]],
     config:     PlotConfig,
     horizontal: bool = True,
 ) -> None:
@@ -276,7 +276,7 @@ def plot_bar_error(
 
     Parameters
     ----------
-    values : dict[str, tuple[float|int, float]]
+    values : Dict[str, Tuple[float|int, float]]
         Dictionary of {name : (value, error)}.
     config : PlotConfig
         The plotting config.
@@ -311,7 +311,7 @@ def plot_bar_error(
 
 
 def plot_xy_single(
-    values:   dict[str, list],
+    values:   Dict[str, List],
     config:   PlotConfig,
     callback: Callable = None,
     **kwargs
@@ -321,7 +321,7 @@ def plot_xy_single(
 
     Parameters
     ----------
-    values : dict{str, list}
+    values : Dict{str, List}
         Dictionary containing {"label": list of values}.
     config : PlotConfig
         The plotting config.
@@ -350,7 +350,7 @@ def plot_xy_single(
 
 
 def plot_xy_pair(
-    values: dict[str, list[tuple]],
+    values: Dict[str, List[Tuple]],
     config: PlotConfig
 ) -> None:
     """
@@ -358,7 +358,7 @@ def plot_xy_pair(
 
     Parameters
     ----------
-    values : dict{str, list[tuple]}
+    values : Dict{str, List[Tuple]}
         Dictionary containing labels and points {name ; list of (x, y)}.
     config : PlotConfig
         PlotConfig.
@@ -384,7 +384,7 @@ def plot_xy_pair(
 
 
 def plot_scatter(
-    values:   list[tuple],
+    values:   List[Tuple],
     config:   PlotConfig,
     callback: Callable = None,
     **kwargs

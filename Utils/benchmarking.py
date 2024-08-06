@@ -4,6 +4,7 @@ import logging
 import os
 from dataclasses import dataclass, asdict
 from copy import deepcopy
+from typing import Tuple, List
 
 import torch
 import torch.nn as nn
@@ -67,7 +68,7 @@ def add_model_stat_to_json(path: str, data: ModelStats) -> None:
         json.dump(database, file, indent=4)
 
 
-def get_model_stats_from_json(path: str, model_names: list[str], sort: bool = False) -> list[ModelStats]:
+def get_model_stats_from_json(path: str, model_names: List[str], sort: bool = False) -> List[ModelStats]:
     """
     Get a list of ModelStats instances from a json file by name searching.
 
@@ -75,14 +76,14 @@ def get_model_stats_from_json(path: str, model_names: list[str], sort: bool = Fa
     ----------
     path : str
         Path to json file.
-    model_names : list[str]
+    model_names : List[str]
         List of names corresponding to the ModelStats to retrieve.
     sort : bool
         Whether or not to sort the results based on the model_names.
 
     Returns
     -------
-    stats : list[ModelStats]
+    stats : List[ModelStats]
         List of ModelStats.
     """
     if not os.path.exists(path):
@@ -321,7 +322,7 @@ def get_dataset_size(image_size: int, channels: int, num_images: int, data_width
     return (bits / GiB) * num_images
 
 
-def compute_top_mean_std(values: np.ndarray, discard: int) -> tuple[float, float, float]:
+def compute_top_mean_std(values: np.ndarray, discard: int) -> Tuple[float, float, float]:
     """
     Compute the top value, mean, and std of a given array.
 
@@ -343,7 +344,7 @@ def compute_top_mean_std(values: np.ndarray, discard: int) -> tuple[float, float
     return top, mean, std
 
 
-def time_to_convergence(accuracies: list[float], time_per_epoch: float, std_threshold: float, window_size: int) -> tuple[int, float]:
+def time_to_convergence(accuracies: List[float], time_per_epoch: float, std_threshold: float, window_size: int) -> Tuple[int, float]:
     """
     Compute the time it takes for an array of accuracies to converge. Convergence is defined as...
         std(last_window_size_accuracies) <= std_threshold
@@ -355,7 +356,7 @@ def time_to_convergence(accuracies: list[float], time_per_epoch: float, std_thre
 
     Parameters
     ----------
-    accuracies : list[float]
+    accuracies : List[float]
         The running accuracies.
     time_per_epoch : float
         The amount of time per epoch.

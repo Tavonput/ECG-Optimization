@@ -3,7 +3,7 @@ import random
 import h5py
 import logging
 import os
-from typing import Union
+from typing import Union, List, Dict
 
 import torch
 
@@ -148,7 +148,7 @@ def build_dataloader(
     preload_test:   bool = False,
     half_precision: bool = False,
     max_memory:     float = 0.95
-) -> Union[dict[str, DataLoader], None]:
+) -> Union[Dict[str, DataLoader], None]:
     """
     Build the train and test dataloaders from EcgDataset.
 
@@ -173,7 +173,7 @@ def build_dataloader(
         
     Returns
     -------
-    dataloaders : dict {str , DataLoader}
+    dataloaders : Dict {str , DataLoader}
         Dictionary containing two entries:
             "train": Training dataloader
             "test":  Testing dataloader
@@ -190,7 +190,7 @@ def build_dataloader(
 
     if transform is None:
         trans = Compose([ToTensor()])
-    elif isinstance(transform, list):
+    elif isinstance(transform, List):
         trans = Compose([ToTensor()] + transform)
     else:
         trans = Compose([ToTensor(), transform])
@@ -241,7 +241,7 @@ def visualize_ecg_data(dataloader: DataLoader) -> None:
     plt.show()
 
 
-def examine_dataset(dataset_path: str) -> dict[str, int]:
+def examine_dataset(dataset_path: str) -> Dict[str, int]:
     """
     Examine the keys in a hdf5 file.
 
@@ -252,7 +252,7 @@ def examine_dataset(dataset_path: str) -> dict[str, int]:
     
     Returns
     -------
-    stats : dict {str : int}
+    stats : Dict {str : int}
         Dataset information in the form of a dictionary.
     """
     data = dict()
