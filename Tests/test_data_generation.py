@@ -75,6 +75,13 @@ class TestDataGeneration(unittest.TestCase):
         dummy_output = resample_signal(dummy_input, 500)
         self.assertEqual(dummy_output.shape, (3, 500))
 
+
+    def test_crop_signal(self):
+        dummy_input = np.random.randn(3, 256)
+
+        dummy_output = crop_signal(dummy_input, 128)
+        self.assertEqual(dummy_output.shape, (3, 128))
+
     
 if __name__ == "__main__":
     unittest.main()

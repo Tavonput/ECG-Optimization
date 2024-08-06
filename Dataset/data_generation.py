@@ -375,7 +375,7 @@ def crop_images(images: np.ndarray, size: int) -> np.ndarray:
 
 def resample_signal(signals: np.ndarray, size: int) -> np.ndarray:
     """
-    Resample a signal using 'resample' for scipy. Input must be of shape (b, s).
+    Resample signals using 'resample' for scipy. Input must be of shape (b, s).
 
     Parameters
     ----------
@@ -391,6 +391,30 @@ def resample_signal(signals: np.ndarray, size: int) -> np.ndarray:
         The resampled signals.
     """
     return resample(signals, size, axis=1)
+
+
+def crop_signal(signals: np.ndarray, size: int) -> np.ndarray:
+    """
+    Center crop a batch of signals. Input signals must be of shape (b, s).
+
+    Parameters
+    ----------
+    signals : np.ndarray
+        The original signals of shape (b, s).
+
+    size : int
+        The new size.
+    
+    Returns
+    ------
+    signals : np.ndarray
+        The cropped signals.
+    """
+    batch_size, original_size = signals.shape
+
+    start_idx = (original_size - size) // 2
+    end_idx   = start_idx + size
+    return signals[:, start_idx : end_idx]
 
 
 #===========================================================================================================================
@@ -988,16 +1012,20 @@ def create_preprocessed_dataset(
             batch_data   = original_data[current_idx : (current_idx + batch)]
             batch_labels = original_labels[current_idx : (current_idx + batch)]
 
-            if method == "resize":
-                new_batch_data = resize_images(batch_data, new_size)
-            elif method == "crop":
-                new_batch_data = crop_images(batch_data, new_size)
-            elif method == "resample":
-                new_batch_data = resample_signal(batch_data, new_size)
-            else:
-                log.error(f"{method} is not supported")
-                original_dataset.close()
-                return 
+            match method:
+                case "resize":
+                    new_batch_data = resize_images(batch_data, new_size)
+                case "resample":
+                    new_batch_data = resample_signal(batch_data, new_size)
+                case "crop":
+                    if data_type == "image":
+                        new_batch_data = crop_images(batch_data, new_size)
+                    elif data_type == "signal":
+                        new_batch_data = crop_signal(batch_data, new_size)
+                case _:
+                    log.error(f"{method} is not supported")
+                    original_dataset.close()
+                    return 
 
             # Store data
             new_data.resize(new_data.shape[0] + batch, axis=0)
