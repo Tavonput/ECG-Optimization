@@ -50,14 +50,14 @@ class TestDataGeneration(unittest.TestCase):
     def test_resize_image(self):
         dummy_input = np.random.randn(2, 3, 256, 256)
 
-        dummy_output = resize_images(dummy_input, 128)
+        dummy_output = SamplePreprocessor._resize_images(dummy_input, 128)
         self.assertEqual(dummy_output.shape, (2, 3, 128, 128))
 
 
     def test_crop_image(self):
         dummy_input = np.random.randn(2, 3, 256, 256)
 
-        dummy_output = crop_images(dummy_input, 128)
+        dummy_output = SamplePreprocessor._crop_images(dummy_input, 128)
         self.assertEqual(dummy_output.shape, (2, 3, 128, 128))
 
 
@@ -72,14 +72,14 @@ class TestDataGeneration(unittest.TestCase):
     def test_resample_signal(self):
         dummy_input = np.random.randn(3, 1000)
 
-        dummy_output = resample_signal(dummy_input, 500)
+        dummy_output = SamplePreprocessor._resample_signal(dummy_input, 500)
         self.assertEqual(dummy_output.shape, (3, 500))
 
 
     def test_crop_signal(self):
         dummy_input = np.random.randn(3, 256)
 
-        dummy_output = crop_signal(dummy_input, 128)
+        dummy_output = SamplePreprocessor._crop_signal(dummy_input, 128)
         self.assertEqual(dummy_output.shape, (3, 128))
 
     

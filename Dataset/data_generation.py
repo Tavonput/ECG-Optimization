@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../")
+
 import h5py
 import wfdb
 import logging
@@ -9,6 +12,8 @@ import numpy as np
 from scipy.signal import resample
 from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
 import cv2
+
+from Utils.system import *
 
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
@@ -308,119 +313,346 @@ def random_subset(value: int, ratio: float, shuffle: bool) -> list[int]:
     return indices[:split_inx]
 
 
-def resize_images(images: np.ndarray, size: int) -> np.ndarray:
+class SamplePreprocessor:
     """
-    Resize a batch of images with bilinear interpolation. Input images must be of shape (b, c, h, w).
-
-    Parameters
-    ----------
-    images : np.ndarray
-        The original images of shape (b, c, h, w).
-    size : int
-        The new size.
-
-    Returns
-    -------
-    images : np.ndarray
-        The resized images.
+    Namespace for sample preprocessing.
     """
-    output_size    = (size, size)
-    resized_images = np.empty((images.shape[0], images.shape[1], *output_size))
-    resized_images = resized_images.astype(images.dtype)
+    def preprocess(data: np.ndarray, method: str, data_type: str, new_size: int) -> np.ndarray | None:
+        """
+        Preprocess either images or a signals.
 
-    for i, image_chw in enumerate(images):
-        for c, image_hw in enumerate(image_chw):
-            resized_images[i][c] = cv2.resize(
-                src           = image_hw, 
-                dsize         = output_size, 
-                interpolation = cv2.INTER_LINEAR
-            )
+        Parameters
+        ----------
+        data : np.ndarray
+            The data to be preprocessed.
+        method : str
+            The preprocessing method.
+        data_type : str
+            The data type.
+        new_size : int
+            The size of the preprocessed data.
 
-    return resized_images
+        Returns
+        -------
+        new_data : np.ndarray
+            The preprocessed data.
+        None
+            If the preprocessing failed.
+        """
+        if data_type == "image":
+            return SamplePreprocessor._preprocess_image(data, method, new_size)
+        elif data_type == "signal":
+            return SamplePreprocessor._preprocess_signal(data, method, new_size)
+        else:
+            log.error(f"{data_type} is not a valid sample type for preprocessing")
+            return None
+        
+        
+    def _preprocess_image(data: np.ndarray, method: str, new_size: int) -> np.ndarray | None:
+        """
+        Preprocess either images.
 
+        Parameters
+        ----------
+        data : np.ndarray
+            The data to be preprocessed.
+        method : str
+            The preprocessing method.
+        new_size : int
+            The size of the preprocessed data.
 
-def crop_images(images: np.ndarray, size: int) -> np.ndarray:
-    """
-    Center crop a batch of images. Input images must be of shape (b, c, h, w).
+        Returns
+        -------
+        new_data : np.ndarray
+            The preprocessed data.
+        None
+            If the preprocessing failed.
+        """
+        if method == "resize":
+            return SamplePreprocessor._resize_images(data, new_size)
+        elif method == "crop":
+            return SamplePreprocessor._crop_images(data, new_size)
+        else:
+            log.error(f"{method} is not a valid image preprocessing method")
+            return None
 
-    Parameters
-    ----------
-    images : np.ndarray
-        The original images of shape (b, c, h, w).
-    size : int
-        The new size.
-
-    Returns
-    -------
-    images : np.ndarray
-        The cropped images.
-    """
-    output_size    = (size, size)
-    input_size     = (images.shape[2], images.shape[3])
-    resized_images = np.empty((images.shape[0], images.shape[1], *output_size))
-    resized_images = resized_images.astype(images.dtype)
-
-    center_y, center_x = input_size[0] // 2, input_size[1] // 2
-    start_x = center_x - (output_size[1] // 2)
-    start_y = center_y - (output_size[0] // 2)
-    end_x   = start_x + output_size[1]
-    end_y   = start_y + output_size[0]
-
-    for i, image_chw in enumerate(images):
-        for c, image_hw in enumerate(image_chw):
-            resized_images[i][c] = image_hw[start_y:end_y, start_x:end_x]
-
-    return resized_images
-
-
-def resample_signal(signals: np.ndarray, size: int) -> np.ndarray:
-    """
-    Resample signals using 'resample' for scipy. Input must be of shape (b, s).
-
-    Parameters
-    ----------
-    signals : np.ndarray
-        The original signals of shape (b, s).
-
-    size : int
-        The new size.
     
-    Returns
-    ------
-    signals : np.ndarray
-        The resampled signals.
-    """
-    return resample(signals, size, axis=1)
+    def _preprocess_signal(data: np.ndarray, method: str, new_size: int) -> np.ndarray | None:
+        """
+        Preprocess either signals.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The data to be preprocessed.
+        method : str
+            The preprocessing method.
+        new_size : int
+            The size of the preprocessed data.
+
+        Returns
+        -------
+        new_data : np.ndarray
+            The preprocessed data.
+        None
+            If the preprocessing failed.
+        """
+        if method == "resample":
+            return SamplePreprocessor._resample_signal(data, new_size)
+        if method == "crop":
+            return SamplePreprocessor._crop_signal(data, new_size)
+        else:
+            log.error(f"{method} is not a valid signal preprocessing method")
+            return None
 
 
-def crop_signal(signals: np.ndarray, size: int) -> np.ndarray:
-    """
-    Center crop a batch of signals. Input signals must be of shape (b, s).
+    def _resize_images(images: np.ndarray, size: int) -> np.ndarray:
+        """
+        Resize a batch of images with bilinear interpolation. Input images must be of shape (b, c, h, w).
 
-    Parameters
-    ----------
-    signals : np.ndarray
-        The original signals of shape (b, s).
+        Parameters
+        ----------
+        images : np.ndarray
+            The original images of shape (b, c, h, w).
+        size : int
+            The new size.
 
-    size : int
-        The new size.
-    
-    Returns
-    ------
-    signals : np.ndarray
-        The cropped signals.
-    """
-    batch_size, original_size = signals.shape
+        Returns
+        -------
+        images : np.ndarray
+            The resized images.
+        """
+        output_size    = (size, size)
+        resized_images = np.empty((images.shape[0], images.shape[1], *output_size))
+        resized_images = resized_images.astype(images.dtype)
 
-    start_idx = (original_size - size) // 2
-    end_idx   = start_idx + size
-    return signals[:, start_idx : end_idx]
+        for i, image_chw in enumerate(images):
+            for c, image_hw in enumerate(image_chw):
+                resized_images[i][c] = cv2.resize(
+                    src           = image_hw, 
+                    dsize         = output_size, 
+                    interpolation = cv2.INTER_LINEAR
+                )
+
+        return resized_images
+
+
+    def _crop_images(images: np.ndarray, size: int) -> np.ndarray:
+        """
+        Center crop a batch of images. Input images must be of shape (b, c, h, w).
+
+        Parameters
+        ----------
+        images : np.ndarray
+            The original images of shape (b, c, h, w).
+        size : int
+            The new size.
+
+        Returns
+        -------
+        images : np.ndarray
+            The cropped images.
+        """
+        output_size    = (size, size)
+        input_size     = (images.shape[2], images.shape[3])
+        resized_images = np.empty((images.shape[0], images.shape[1], *output_size))
+        resized_images = resized_images.astype(images.dtype)
+
+        center_y, center_x = input_size[0] // 2, input_size[1] // 2
+        start_x = center_x - (output_size[1] // 2)
+        start_y = center_y - (output_size[0] // 2)
+        end_x   = start_x + output_size[1]
+        end_y   = start_y + output_size[0]
+
+        for i, image_chw in enumerate(images):
+            for c, image_hw in enumerate(image_chw):
+                resized_images[i][c] = image_hw[start_y:end_y, start_x:end_x]
+
+        return resized_images
+
+
+    def _resample_signal(signals: np.ndarray, size: int) -> np.ndarray:
+        """
+        Resample signals using 'resample' for scipy. Input must be of shape (b, s).
+
+        Parameters
+        ----------
+        signals : np.ndarray
+            The original signals of shape (b, s).
+
+        size : int
+            The new size.
+        
+        Returns
+        ------
+        signals : np.ndarray
+            The resampled signals.
+        """
+        return resample(signals, size, axis=1)
+
+
+    def _crop_signal(signals: np.ndarray, size: int) -> np.ndarray:
+        """
+        Center crop a batch of signals. Input signals must be of shape (b, s).
+
+        Parameters
+        ----------
+        signals : np.ndarray
+            The original signals of shape (b, s).
+
+        size : int
+            The new size.
+        
+        Returns
+        ------
+        signals : np.ndarray
+            The cropped signals.
+        """
+        batch_size, original_size = signals.shape
+
+        start_idx = (original_size - size) // 2
+        end_idx   = start_idx + size
+        return signals[:, start_idx : end_idx]
 
 
 #===========================================================================================================================
 # Dataset Creation
 #
-def create_raw_dataset(data_path: str, output_path: str, window_size: int, full: bool = False) -> None:
+class DatasetHelper:
+    """
+    Helper class for accessing a hdf5 dataset.
+
+    Parameters
+    ----------
+    dataset_path : str
+        The path to the hdf5 dataset.
+    data_key : str
+        The key of the main data stored in the dataset.
+    """
+    def __init__(self, dataset_path: str, data_key: str) -> None:
+        self.dataset = h5py.File(dataset_path, "r")
+        self.data:   np.ndarray = self.dataset[data_key]
+        self.labels: np.ndarray = self.dataset["labels"]
+
+        self.data_shape = list(self.data.shape[1:])
+        self.size       = self.data.shape[0]
+
+
+    def collect_samples(self, indices: list, contiguous: bool) -> tuple:
+        """
+        Collect samples from the dataset given a set of indices.
+
+        Parameters
+        ----------
+        indices : list
+            The list of indices.
+        contiguous : bool
+            Is the list of indices ordered.
+
+        Returns
+        -------
+        data : np.ndarray
+            The data.
+        labels : np.ndarray
+            The labels.
+        """
+        if contiguous:
+            # The indices are ordered, so we can slice into the original dataset
+            data   = self.data[indices]
+            labels = self.labels[indices]
+        else:
+            data   = []
+            labels = []
+            for i in indices:
+                data.append(self.data[i])
+                labels.append(self.labels[i])
+            
+            data   = np.stack(data, axis=0)
+            labels = np.stack(labels, axis=0)
+
+        return data, labels
+
+
+    def close(self) -> None:
+        """
+        Close the dataset file.
+        """
+        self.dataset.close()
+
+
+def create_shuffled_dataset(
+    dataset_path: str, 
+    output_path:  str,
+    data_key:     str,
+    batch_size:   int
+) -> None:
+    """
+    Create a shuffled version of a dataset.
+
+    Parameters
+    ----------
+    dataset_path : str
+        The path to the base dataset.
+    output_path : str
+        The output path.
+    data_key : str
+        The key of the main data stored in the original hdf5 dataset.
+    batch_size : int
+        The maximum batch size to use when processing the datasets.
+    """
+    if check_path_exists(dataset_path) is False:
+        return
+    
+    original_dataset = DatasetHelper(dataset_path, data_key)
+
+    with h5py.File(output_path, "w") as hdf:
+        hdf.create_dataset(
+            data_key, 
+            shape    = original_dataset.data.shape, 
+            dtype    = original_dataset.data.dtype,
+        )
+        hdf.create_dataset(
+            "labels", 
+            shape    = original_dataset.labels.shape, 
+            dtype    = original_dataset.labels.dtype
+        )
+
+    indices = np.arange(original_dataset.size)
+    np.random.shuffle(indices)
+
+    batches     = batch_value(original_dataset.size, batch_size)
+    current_idx = 0
+    start_time  = time.time()
+
+    log.info(f"Shuffling dataset from {dataset_path}")
+    with h5py.File(output_path, "a") as hdf:
+        new_data   = hdf[data_key]
+        new_labels = hdf["labels"]
+
+        for i, batch in enumerate(batches):
+            log.info(f"\tProcessing batch {i + 1}/{len(batches)}")
+
+            batch_indices = indices[current_idx : (current_idx + batch)]
+
+            batch_data, batch_labels = original_dataset.collect_samples(batch_indices, contiguous=False)
+
+            new_data[current_idx : (current_idx + batch)]   = batch_data
+            new_labels[current_idx : (current_idx + batch)] = batch_labels
+
+            current_idx += batch
+
+    end_time = time.time()
+    log.info(f"Finished processing dataset in {(end_time - start_time):.4f}s. Stored in {output_path}")
+
+    original_dataset.close()
+
+
+def create_raw_dataset(
+    data_path:   str, 
+    output_path: str, 
+    window_size: int, 
+    full:        bool = False
+) -> None:
     """
     Create a hdf5 dataset from MIT-BIH.
 
@@ -435,9 +667,7 @@ def create_raw_dataset(data_path: str, output_path: str, window_size: int, full:
     full : bool
         Use all of the records.
     """
-    output_dir = os.path.dirname(output_path)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    check_path_for_dir(output_path, create=True)
 
     # Initialize datasets in the hdf5 file
     with h5py.File(output_path, "w") as hf:
@@ -614,70 +844,58 @@ def create_image_dataset_contiguous(signal_dataset_path: str, output_path: str, 
     new_size : int
         The new size of the image after preprocessing.
     """
-    if not os.path.exists(signal_dataset_path):
-        log.error(f"{signal_dataset_path} does not exist")
+    if check_path_exists(signal_dataset_path) is False:
         return
+    check_path_for_dir(output_path, create=True)
 
-    output_dir = os.path.dirname(output_path)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    signal_dataset = h5py.File(signal_dataset_path, "r")
-    segments       = signal_dataset["segments"]
-    labels         = signal_dataset["labels"]
-
-    image_size  = segments.shape[-1] if preprocess is None else new_size
-    num_samples = len(segments)
+    signal_dataset = DatasetHelper(signal_dataset_path, "segments")
+    image_size     = signal_dataset.data_shape[0] if preprocess is None else new_size
 
     # Initialize dataset for images and labels
     with h5py.File(output_path, "w") as hdf:
         hdf.create_dataset(
             "images", 
-            shape    = (num_samples, 3, image_size, image_size), 
+            shape    = (signal_dataset.size, 3, image_size, image_size), 
             dtype    = np.float32,
         )
         hdf.create_dataset(
             "labels", 
-            shape    = (num_samples,), 
+            shape    = (signal_dataset.size,), 
             dtype    = int
         )
         
         # The labels should be the exact same
         image_labels = hdf["labels"]
-        image_labels[:len(labels)] = labels
+        image_labels[:signal_dataset.size] = signal_dataset.labels
 
     # Transform samples in batches
-    batches = batch_value(num_samples, batch_size)
+    batches = batch_value(signal_dataset.size, batch_size)
     current_idx = 0
     total_start_time = time.time()
 
     log.info(f"Transforming signals into images from {signal_dataset_path}")
-    log.info(f"\tTotal:      {num_samples}")
+    log.info(f"\tTotal:      {signal_dataset.size}")
     log.info(f"\tPreprocess: {preprocess}")
     log.info(f"\tImage Size: {image_size}")
     
     log.info(f"\tBegin transformation...")
-    for i, batch in enumerate(batches):
-        log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
-        start_time = time.time()
+    with h5py.File(output_path, "a") as hdf:
+        images = hdf["images"]
 
-        batch_images = signal_to_image(segments[current_idx : (current_idx + batch)])
+        for i, batch in enumerate(batches):
+            log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
+            start_time = time.time()
 
-        if preprocess is not None:
-            if preprocess == "resize":
-                batch_images = resize_images(batch_images, new_size)
-            elif preprocess == "crop":
-                batch_images = crop_images(batch_images, new_size)
+            batch_images = signal_to_image(signal_dataset.data[current_idx : (current_idx + batch)])
+            if preprocess is not None:
+                batch_images = SamplePreprocessor.preprocess(batch_images, preprocess, "image", new_size)
 
-        # Store the images
-        with h5py.File(output_path, "a") as hdf:
-            images = hdf["images"]
             images[current_idx : (current_idx + batch)] = batch_images
 
-        end_time = time.time()
-        log.info(f"\t\tCompleted batch in {(end_time - start_time):.4f}s")
+            end_time = time.time()
+            log.info(f"\t\tCompleted batch in {(end_time - start_time):.4f}s")
 
-        current_idx += batch
+            current_idx += batch
 
     total_end_time = time.time()
     log.info(f"Image transformation complete. Total time: {(total_end_time - total_start_time):4f}s")
@@ -712,25 +930,19 @@ def create_train_test_from_dataset(
     batch_size : int
         The maximum batch size to use when processing the split datasets.
     """
-    if not os.path.exists(dataset_path):
-        log.error(f"{dataset_path} does not exist")
+    if check_path_exists(dataset_path) is False:
         return
     dataset_dir = os.path.dirname(dataset_path)
     
-    original_dataset = h5py.File(dataset_path, "r")
-    original_data    = original_dataset[data_key]
-    original_labels  = original_dataset["labels"]
+    original_dataset = DatasetHelper(dataset_path, data_key)
 
-    original_data_shape = list(original_data.shape[1:])
-
-    num_samples = original_data.shape[0]
-    train_indices, test_indices = split_value(num_samples, ratio, shuffle)
+    train_indices, test_indices = split_value(original_dataset.size, ratio, shuffle)
 
     log.info(f"Generating split datasets")
     log.info(f"\tShuffle: {shuffle}")
-    log.info(f"\tTotal:   {num_samples}")
-    log.info(f"\tTrain:   {len(train_indices)} ({(len(train_indices) / num_samples * 100):.2f}%)")
-    log.info(f"\tTest:    {len(test_indices)} ({(len(test_indices) / num_samples * 100):.2f}%)")
+    log.info(f"\tTotal:   {original_dataset.size}")
+    log.info(f"\tTrain:   {len(train_indices)} ({(len(train_indices) / original_dataset.size * 100):.2f}%)")
+    log.info(f"\tTest:    {len(test_indices)} ({(len(test_indices) / original_dataset.size * 100):.2f}%)")
 
     splits = {
         "train": train_indices,
@@ -738,27 +950,22 @@ def create_train_test_from_dataset(
     }
     for split, indices in splits.items():
         log.info(f"Processing split - {split}")
-        split_path = f"{dataset_dir}/{output_name}_{split}.h5"
+        split_path = f"{dataset_dir}/{output_name}_{split}.hdf5"
         start_split_time = time.time()
 
-        # Initialize dataset file
         log.info("\tInitializing dataset")
         with h5py.File(split_path, "w") as hdf:
             hdf.create_dataset(
                 data_key, 
-                shape    = tuple([0]    + original_data_shape), 
-                maxshape = tuple([None] + original_data_shape), 
-                chunks   = tuple([1]    + original_data_shape), 
-                dtype    = original_data.dtype
+                shape    = tuple([len(indices)] + original_dataset.data_shape), 
+                dtype    = original_dataset.data.dtype
             )
             hdf.create_dataset(
                 "labels", 
-                shape    = (0,), 
-                maxshape = (None,), 
-                chunks   = (1,), 
-                dtype    = original_labels.dtype
+                shape    = (len(indices),), 
+                dtype    = original_dataset.labels.dtype
             )
-        
+
         # Copy over data
         log.info("\tCollecting data from original dataset")
         batches     = batch_value(len(indices), batch_size)
@@ -772,20 +979,9 @@ def create_train_test_from_dataset(
                 log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
                 batch_indices = indices[current_idx : (current_idx + batch)]
 
-                batch_data   = []
-                batch_labels = []
-                for i in batch_indices:
-                    batch_data.append(original_data[i])
-                    batch_labels.append(original_labels[i])
-                
-                batch_data   = np.stack(batch_data, axis=0)
-                batch_labels = np.stack(batch_labels, axis=0)
+                batch_data, batch_labels = original_dataset.collect_samples(batch_indices, contiguous=False)
 
-                # Store data
-                split_data.resize(split_data.shape[0] + batch, axis=0)
-                split_data[current_idx : (current_idx + batch)] = batch_data
-
-                split_labels.resize(split_labels.shape[0] + batch, axis=0)
+                split_data[current_idx : (current_idx + batch)]   = batch_data
                 split_labels[current_idx : (current_idx + batch)] = batch_labels
 
                 current_idx += batch
@@ -827,27 +1023,19 @@ def create_subset_from_dataset(
     batch_size : int
         The maximum batch size to use when processing the datasets.
     """
-    if not os.path.exists(dataset_path):
-        log.error(f"{dataset_path} does not exist")
+    if check_path_exists(dataset_path) is False:
         return
 
-    output_dir = os.path.dirname(output_path)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    check_path_for_dir(output_path, create=True)
 
-    original_dataset = h5py.File(dataset_path, "r")
-    original_data    = original_dataset[data_key]
-    original_labels  = original_dataset["labels"]
-
-    original_data_shape = list(original_data.shape[1:])
-    num_samples         = original_data.shape[0]
+    original_dataset = DatasetHelper(dataset_path, data_key)
 
     # Collect indices given the method
     if method == "random":
-        indices = random_subset(num_samples, ratio, shuffle)
+        indices = random_subset(original_dataset.size, ratio, shuffle)
     elif method == "balance":
         MINIMUM_NORMALS = 5000
-        indices = remove_normals(original_labels[:], ratio, MINIMUM_NORMALS)
+        indices = remove_normals(original_dataset.labels[:], ratio, MINIMUM_NORMALS)
         if indices is None:
             log.error("Failed to create subset")
             return
@@ -857,25 +1045,21 @@ def create_subset_from_dataset(
 
     log.info(f"Generating subset from {dataset_path}")
     log.info(f"\tMethod: {method}")
-    log.info(f"\tTotal:  {num_samples}")
-    log.info(f"\tSubset: {len(indices)} ({(len(indices) / num_samples * 100):.2f}%)")
+    log.info(f"\tTotal:  {original_dataset.size}")
+    log.info(f"\tSubset: {len(indices)} ({(len(indices) / original_dataset.size * 100):.2f}%)")
 
     # Initialize the new dataset
     log.info("\tInitializing dataset")
     with h5py.File(output_path, "w") as hdf:
         hdf.create_dataset(
             data_key, 
-            shape    = tuple([0]    + original_data_shape), 
-            maxshape = tuple([None] + original_data_shape), 
-            chunks   = tuple([1]    + original_data_shape), 
-            dtype    = original_data.dtype
+            shape    = tuple([len(indices)] + original_dataset.data_shape), 
+            dtype    = original_dataset.data.dtype
         )
         hdf.create_dataset(
             "labels", 
-            shape    = (0,), 
-            maxshape = (None,), 
-            chunks   = (1,), 
-            dtype    = original_labels.dtype
+            shape    = (len(indices),), 
+            dtype    = original_dataset.labels.dtype
         )
 
     # Copy over data
@@ -892,25 +1076,10 @@ def create_subset_from_dataset(
             log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
             batch_indices = indices[current_idx : (current_idx + batch)]
 
-            if shuffle is False and method == "random":
-                # The indices are ordered, so we can slice into the original dataset
-                batch_data   = original_data[batch_indices]
-                batch_labels = original_labels[batch_indices]
-            else:
-                batch_data   = []
-                batch_labels = []
-                for i in batch_indices:
-                    batch_data.append(original_data[i])
-                    batch_labels.append(original_labels[i])
-                
-                batch_data   = np.stack(batch_data, axis=0)
-                batch_labels = np.stack(batch_labels, axis=0)
+            is_contiguous = (shuffle is False and method == "random")
+            batch_data, batch_labels = original_dataset.collect_samples(batch_indices, is_contiguous)
 
-            # Store data
-            subset_data.resize(subset_data.shape[0] + batch, axis=0)
-            subset_data[current_idx : (current_idx + batch)] = batch_data
-
-            subset_labels.resize(subset_labels.shape[0] + batch, axis=0)
+            subset_data[current_idx : (current_idx + batch)]   = batch_data
             subset_labels[current_idx : (current_idx + batch)] = batch_labels
 
             current_idx += batch
@@ -950,22 +1119,15 @@ def create_preprocessed_dataset(
     batch_size : int
         The maximum batch size to use when processing the dataset.
     """
-    if not os.path.exists(dataset_path):
-        log.error(f"{dataset_path} does not exist")
+    if check_path_exists(dataset_path) is False:
         return
     
-    output_dir = os.path.dirname(output_path)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    check_path_for_dir(output_path, create=True)
 
-    original_dataset = h5py.File(dataset_path, "r")
-    original_data    = original_dataset[data_key]
-    original_labels  = original_dataset["labels"]
-    num_samples      = original_data.shape[0]
+    original_dataset = DatasetHelper(dataset_path, data_key)
 
-    original_data_shape = list(original_data.shape[1:])
     if data_type == "image":
-        new_data_shape = [original_data_shape[0], new_size, new_size]
+        new_data_shape = [original_dataset.data_shape[0], new_size, new_size]
     elif data_type == "signal":
         new_data_shape = [new_size]
     else:
@@ -974,8 +1136,8 @@ def create_preprocessed_dataset(
         
     log.info(f"Generating preprocessed dataset from {dataset_path}")
     log.info(f"\tMethod:   {method}")
-    log.info(f"\tTotal:    {num_samples}")
-    log.info(f"\tOriginal: {tuple(original_data_shape)}")
+    log.info(f"\tTotal:    {original_dataset.size}")
+    log.info(f"\tOriginal: {tuple(original_dataset.data_shape)}")
     log.info(f"\tNew:      {tuple(new_data_shape)}")
 
     # Initialize the new dataset
@@ -983,22 +1145,18 @@ def create_preprocessed_dataset(
     with h5py.File(output_path, "w") as hdf:
         hdf.create_dataset(
             data_key, 
-            shape    = tuple([0]    + new_data_shape), 
-            maxshape = tuple([None] + new_data_shape), 
-            chunks   = tuple([1]    + new_data_shape), 
-            dtype    = original_data.dtype
+            shape    = tuple([original_dataset.size] + new_data_shape), 
+            dtype    = original_dataset.data.dtype
         )
         hdf.create_dataset(
             "labels", 
-            shape    = (0,), 
-            maxshape = (None,), 
-            chunks   = (1,), 
-            dtype    = original_labels.dtype
+            shape    = (original_dataset.size,), 
+            dtype    = original_dataset.labels.dtype
         )
 
     # Copy over data
     log.info("\tPreprocessing data from original dataset")
-    batches     = batch_value(num_samples, batch_size)
+    batches     = batch_value(original_dataset.size, batch_size)
     current_idx = 0
 
     start_time = time.time()
@@ -1008,30 +1166,14 @@ def create_preprocessed_dataset(
 
         for i, batch in enumerate(batches):
             log.info(f"\t\tProcessing batch {i + 1}/{len(batches)}")
+            batch_data, batch_labels = original_dataset.collect_samples(range(current_idx, current_idx + batch), contiguous=True)
 
-            batch_data   = original_data[current_idx : (current_idx + batch)]
-            batch_labels = original_labels[current_idx : (current_idx + batch)]
+            new_batch_data = SamplePreprocessor.preprocess(batch_data, method, data_type, new_size)
+            if new_batch_data is None:
+                original_dataset.close()
+                return
 
-            match method:
-                case "resize":
-                    new_batch_data = resize_images(batch_data, new_size)
-                case "resample":
-                    new_batch_data = resample_signal(batch_data, new_size)
-                case "crop":
-                    if data_type == "image":
-                        new_batch_data = crop_images(batch_data, new_size)
-                    elif data_type == "signal":
-                        new_batch_data = crop_signal(batch_data, new_size)
-                case _:
-                    log.error(f"{method} is not supported")
-                    original_dataset.close()
-                    return 
-
-            # Store data
-            new_data.resize(new_data.shape[0] + batch, axis=0)
-            new_data[current_idx : (current_idx + batch)] = new_batch_data
-
-            new_labels.resize(new_labels.shape[0] + batch, axis=0)
+            new_data[current_idx : (current_idx + batch)]   = new_batch_data
             new_labels[current_idx : (current_idx + batch)] = batch_labels
 
             current_idx += batch
@@ -1068,33 +1210,26 @@ def create_full_split_sets(
     batch_size : int
         The maximum batch size to use when processing the datasets.
     """
-    if not os.path.exists(dataset_path):
-        log.error(f"{dataset_path} does not exist")
+    if check_path_exists(dataset_path) is False:
         return
-
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    original_dataset = h5py.File(dataset_path, "r")
-    original_data    = original_dataset[data_key]
-    original_labels  = original_dataset["labels"]
-
-    original_data_shape = list(original_data.shape[1:])
-    num_samples         = original_data.shape[0]
+    original_dataset = DatasetHelper(dataset_path, data_key)
 
     # Get set indices
-    full_indices = random_subset(num_samples, 1.0, shuffle=shuffle)
+    full_indices = random_subset(original_dataset.size, 1.0, shuffle=shuffle)
     indices      = np.array_split(full_indices, num_sets)
 
     log.info(f"Generating full split datasets from {dataset_path}")
-    log.info(f"\tTotal:    {num_samples}")
+    log.info(f"\tTotal:    {original_dataset.size}")
     log.info(f"\tNum Sets: {num_sets}")
     for i, s in enumerate(indices):
         log.info(f"\tSet {i}:    {len(s)}")
 
     total_start_time = time.time()
     for i, set_indices in enumerate(indices):
-        set_path = f"{output_dir}/set_{i}.h5"
+        set_path = f"{output_dir}/set_{i}.hdf5"
         log.info(f"\tGenerating set {i} and saving to {set_path}")
 
         # Initialize datasets
@@ -1102,17 +1237,13 @@ def create_full_split_sets(
         with h5py.File(set_path, "w") as hdf:
             hdf.create_dataset(
                 data_key, 
-                shape    = tuple([0]    + original_data_shape), 
-                maxshape = tuple([None] + original_data_shape), 
-                chunks   = tuple([1]    + original_data_shape), 
-                dtype    = original_data.dtype
+                shape    = tuple([len(set_indices)] + original_dataset.data_shape), 
+                dtype    = original_dataset.data.dtype
             )
             hdf.create_dataset(
                 "labels", 
-                shape    = (0,), 
-                maxshape = (None,), 
-                chunks   = (1,), 
-                dtype    = original_labels.dtype
+                shape    = (len(set_indices),), 
+                dtype    = original_dataset.labels.dtype
             )
 
         batches     = batch_value(len(set_indices), batch_size)
@@ -1129,20 +1260,9 @@ def create_full_split_sets(
                 log.info(f"\t\t\tProcessing batch {j + 1}/{len(batches)}")
                 batch_indices = set_indices[current_idx : (current_idx + batch)]
 
-                batch_data   = []
-                batch_labels = []
-                for i in batch_indices:
-                    batch_data.append(original_data[j])
-                    batch_labels.append(original_labels[j])
-                
-                batch_data   = np.stack(batch_data, axis=0)
-                batch_labels = np.stack(batch_labels, axis=0)
+                batch_data, batch_labels = original_dataset.collect_samples(batch_indices, contiguous=False)
 
-                # Store data
-                subset_data.resize(subset_data.shape[0] + batch, axis=0)
-                subset_data[current_idx : (current_idx + batch)] = batch_data
-
-                subset_labels.resize(subset_labels.shape[0] + batch, axis=0)
+                subset_data[current_idx : (current_idx + batch)]   = batch_data
                 subset_labels[current_idx : (current_idx + batch)] = batch_labels
 
                 current_idx += batch
@@ -1163,14 +1283,21 @@ if __name__ == "__main__":
     """
     Main used for testing.
     """
-    import sys
-    sys.path.append("../")
+    d1 = DatasetHelper("../Data/MIT-BIH-Raw/Datasets/Resolution-64/signal_full.hdf5", "segments")
+    d2 = DatasetHelper("../Data/MIT-BIH-Raw/Datasets/Resolution-64/signal_full_shuffled.hdf5", "segments")
 
-    create_full_split_sets(
-        dataset_path = f"../Data/MIT-BIH-Raw/Datasets/Resolution-128/signal_unfiltered_i128_train.h5",
-        output_dir   = f"../Data/MIT-BIH-Raw/Datasets/Resolution-128/signal_unfiltered_i128_train_full_split_2",
-        data_key     = "segments",
-        num_sets     = 2,
-        shuffle      = False, # Base dataset is already shuffled
-        batch_size   = 1000
-    )
+    log.info(f"HELP: {d1.data_shape}, {d1.size}")
+    log.info(f"HELP: {d2.data_shape}, {d2.size}")
+
+    total_same = 0
+    for i in range(d1.size):
+        d1_data = d1.data[i]
+        d2_data = d2.data[i]
+
+        if np.array_equal(d1_data, d2_data):
+            total_same += 1
+
+    log.info(f"HELP: {total_same}")
+
+    d1.close()
+    d2.close()
