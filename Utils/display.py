@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from collections import namedtuple, defaultdict
-from typing import Callable
+from typing import Callable, Union
 
 import numpy as np
 import seaborn as sns
@@ -89,8 +89,9 @@ class GroupedValues:
         return len(list(self.groups.values())[0])
 
 
-    def add_to_group(self, group: str, value: int|float, error: int|float = 0) -> None:
+    def add_to_group(self, group: str, value: Union[int, float], error: Union[int, float] = 0) -> None:
         self.groups[group].append(GroupedValues.Entry(value, error))
+
 
 #===========================================================================================================================
 # Specific Plots and Tables
@@ -203,7 +204,7 @@ def display_training_stat_table(stats: list[TrainingStats], base: TrainingStats,
 # Generic Plots
 #
 def plot_bar(
-    values:     dict[str, float|int],
+    values:     dict[str, Union[float, int]],
     config:     PlotConfig,
     horizontal: bool = True,
 ) -> None:
@@ -266,7 +267,7 @@ def plot_bar(
 
 
 def plot_bar_error(
-    values:     dict[str, tuple[float|int, float]],
+    values:     dict[str, tuple[Union[float, int], float]],
     config:     PlotConfig,
     horizontal: bool = True,
 ) -> None:

@@ -6,6 +6,7 @@ import wfdb
 import logging
 import os
 import time
+from typing import Union
 
 import numpy as np
 
@@ -72,7 +73,7 @@ class ArrhythmiaLabels:
 #===========================================================================================================================
 # Data Generation Helpers
 #
-def segment_heartbeat(signal: np.ndarray, peak: int, window_size: int) -> np.ndarray | None:
+def segment_heartbeat(signal: np.ndarray, peak: int, window_size: int) -> Union[np.ndarray, None]:
     """
     Segment a heartbeat. The length of the segment will be 2 x window_size.
 
@@ -137,7 +138,7 @@ def process_record(record_path: str, window_size: int) -> tuple[list, list]:
     return np.array(heartbeats), np.array(labels_idx)
 
 
-def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, int | float]:
+def get_class_distribution(labels: list, normalize: bool = False) -> dict[str, Union[int, float]]:
     """
     Get the class distribution of a list of labels.
 
@@ -248,7 +249,7 @@ def split_value(value: int, ratio: float, shuffle: bool) -> tuple[list[int], lis
     return train_split, test_split
 
 
-def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -> list[int] | None:
+def remove_normals(labels: np.ndarray, ratio_to_keep: float, min_to_keep: int) -> Union[list[int], None]:
     """
     Given an array of labels, create a subset by only removing instances of the normal label.
 
@@ -317,7 +318,7 @@ class SamplePreprocessor:
     """
     Namespace for sample preprocessing.
     """
-    def preprocess(data: np.ndarray, method: str, data_type: str, new_size: int) -> np.ndarray | None:
+    def preprocess(data: np.ndarray, method: str, data_type: str, new_size: int) -> Union[np.ndarray, None]:
         """
         Preprocess either images or a signals.
 
@@ -348,7 +349,7 @@ class SamplePreprocessor:
             return None
         
         
-    def _preprocess_image(data: np.ndarray, method: str, new_size: int) -> np.ndarray | None:
+    def _preprocess_image(data: np.ndarray, method: str, new_size: int) -> Union[np.ndarray, None]:
         """
         Preprocess either images.
 
@@ -377,7 +378,7 @@ class SamplePreprocessor:
             return None
 
     
-    def _preprocess_signal(data: np.ndarray, method: str, new_size: int) -> np.ndarray | None:
+    def _preprocess_signal(data: np.ndarray, method: str, new_size: int) -> Union[np.ndarray, None]:
         """
         Preprocess either signals.
 

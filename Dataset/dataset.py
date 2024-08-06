@@ -3,6 +3,7 @@ import random
 import h5py
 import logging
 import os
+from typing import Union
 
 import torch
 
@@ -147,7 +148,7 @@ def build_dataloader(
     preload_test:   bool = False,
     half_precision: bool = False,
     max_memory:     float = 0.95
-) -> dict[str, DataLoader] | None:
+) -> Union[dict[str, DataLoader], None]:
     """
     Build the train and test dataloaders from EcgDataset.
 
