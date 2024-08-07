@@ -13,12 +13,12 @@ from torch.optim.lr_scheduler import *
 
 from tqdm.auto import tqdm
 
+from system import *
+
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
 logging.getLogger("CLASS").setLevel(logging.INFO)
 log = logging.getLogger("CLASS")
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 #===========================================================================================================================
@@ -63,6 +63,11 @@ class TrainingStats:
         
         self.epochs = 0
 
+        self._deserialize_methods = {
+            1: self._deserialize_v1,
+            2: self._deserialize_v2,
+        }
+
         if from_save is not None:
             self.deserialize(from_save)
 
@@ -95,13 +100,11 @@ class TrainingStats:
             if self.version != TrainingStats.CURRENT_VERSION:
                 log.warning(f"{path} is not in up to date. Current: {self.version}, Newest: {TrainingStats.CURRENT_VERSION}")
 
-            match self.version:
-                case 1: 
-                    self._deserialize_v1(path)
-                case 2: 
-                    self._deserialize_v2(path)
-                case _:
-                    log.error(f"Version {self.version} is not supported")
+            deserialize_method = self._deserialize_methods.get(self.version)
+            if deserialize_method:
+                deserialize_method(path)
+            else:
+                log.error(f"Version {self.version} is not supported")
                 
 
     def _deserialize_v1(self, path: str) -> None:
@@ -154,6 +157,10 @@ class EvaluationStats:
         self.recall:             Dict[str, float] = {}
         self.f1_score:           Dict[str, float] = {}
 
+        self._deserialize_methods = {
+            1: self._deserialize_v1,
+        }
+
         if from_save is not None:
             self.deserialize(from_save)
 
@@ -186,11 +193,11 @@ class EvaluationStats:
                 log.warning(f"\tNewest Version:  {EvaluationStats.CURRENT_VERSION}")
                 log.warning(f"\tCurrent Version: {self.version}")
 
-            match self.version:
-                case 1: 
-                    self._deserialize_v1(path)
-                case _:
-                    log.error(f"{self.version} is not supported")
+            deserialize_method = self._deserialize_methods.get(self.version)
+            if deserialize_method:
+                deserialize_method(path)
+            else:
+                log.error(f"Version {self.version} is not supported")
 
 
     def _deserialize_v1(self, path: str) -> None:
@@ -221,7 +228,8 @@ def train(
     dataloader: DataLoader,
     criterion:  nn.Module,
     optimizer:  Optimizer,
-    scheduler:  LambdaLR
+    scheduler:  LambdaLR,
+    device:     str,
 ) -> List:
     """
     Train a model for one epoch.
@@ -238,6 +246,8 @@ def train(
         Optimizer.
     scheduler : LambdaLR
         Scheduler.
+    device : str
+        The device.
     
     Returns
     -------
@@ -271,6 +281,7 @@ def train(
 def evaluate(
     model:      nn.Module,
     dataloader: DataLoader,
+    device:     str,
     verbose:    bool = True
 ) -> float:
     """
@@ -282,6 +293,8 @@ def evaluate(
         Model to evaluate.
     dataloader : Dataloader
         Testing dataloader.
+    device : str
+        The device.
     verbose : bool
         Verbosity.
 
@@ -312,6 +325,7 @@ def evaluate(
 def evaluate_per_class(
     model:       nn.Module,
     dataloader:  DataLoader,
+    device:      str,
     num_classes: int  = 5,
     verbose:     bool = True
 ) -> EvaluationStats:
@@ -324,6 +338,8 @@ def evaluate_per_class(
         Model to evaluate.
     dataloader : Dataloader
         Testing dataloader.
+    device : str
+        The device.
     num_classes: int
         The number of classes.
     verbose : bool
@@ -422,9 +438,9 @@ def finetune(
     if safety != 0 and not os.path.exists(safety_dir):
         os.makedirs(safety_dir)
 
-    save_dir = os.path.dirname(save_path)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    check_path_for_dir(save_path, create=True)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model.to(device)
     optimizer = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
@@ -441,14 +457,14 @@ def finetune(
         epoch_start_time = time.time()
 
         train_start_time = time.time()
-        running_loss     = train(model, dataloader["train"], criterion, optimizer, scheduler)
+        running_loss     = train(model, dataloader["train"], criterion, optimizer, scheduler, device)
         train_end_time   = time.time()
 
         stats.running_train_time.append(train_end_time - train_start_time)
         stats.running_loss.append(running_loss)
 
         if do_eval:
-            accuracy = evaluate(model, dataloader["test"])
+            accuracy = evaluate(model, dataloader["test"], device)
             stats.running_accuracy.append(accuracy)
 
             if accuracy > stats.best_accuracy:

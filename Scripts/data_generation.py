@@ -3,6 +3,7 @@ sys.path.append("../")
 
 from Dataset.data_generation import *
 
+
 def generate_multi_res_from_same_set():
     base_res       = 256
     base_data_root = "/data/tavonputl/data/MIT-BIH"
@@ -46,13 +47,45 @@ def generate_multi_res_from_same_set():
                 output_path         = f"{base_data_root}/Datasets/Resolution-{res}/image_full_{split}.hdf5",
                 batch_size          = 1000,
             )
+
+
+def generate_resample():
+    base_res       = 256
+    base_data_root = "/data/tavonputl/data/MIT-BIH"
+
+    # Base 256 resolution sets are already created and shuffled
+
+    for res in [224, 192, 160, 128]:
+        create_preprocessed_dataset(
+            dataset_path = f"{base_data_root}/Datasets/Resolution-{base_res}/signal_full_shuffled.hdf5",
+            output_path  = f"{base_data_root}/Datasets/Resolution-{res}/signal_full_resample.hdf5",
+            data_key     = "segments",
+            data_type    = "signal",
+            method       = "resample",
+            new_size     = res,
+            batch_size   = 5000,
+        )
+        create_train_test_from_dataset(
+            dataset_path = f"{base_data_root}/Datasets/Resolution-{res}/signal_full_resample.hdf5",
+            output_name  = "signal_full_resample",
+            ratio        = 0.8,
+            data_key     = "segments",
+            shuffle      = False,
+            batch_size   = 5000,
+        )
+        for split in ["train", "test"]:
+            create_image_dataset_contiguous(
+                signal_dataset_path = f"{base_data_root}/Datasets/Resolution-{res}/signal_full_resample_{split}.hdf5",
+                output_path         = f"{base_data_root}/Datasets/Resolution-{res}/image_full_resample_{split}.hdf5",
+                batch_size          = 1000,
+            )
         
 
 #===========================================================================================================================
 # Main 
 #
 def main():
-    generate_multi_res_from_same_set()
+    generate_resample()
     return
 
 
