@@ -183,7 +183,7 @@ def combine_model_weights():
         )
 
         new_model.to(device)
-        accuracy = evaluate(new_model, dataloader["test"])
+        accuracy = evaluate(new_model, dataloader["test"], device)
         stats    = ModelStats(name=f"ResNet18 - Combined {s}", accuracy=accuracy)
 
         torch.save(new_model.state_dict(), f"{base_dir}/combined.pth")

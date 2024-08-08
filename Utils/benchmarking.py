@@ -21,8 +21,6 @@ logging.basicConfig(format=LOG_FORMAT)
 logging.getLogger("BENCH").setLevel(logging.INFO)
 log = logging.getLogger("BENCH")
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 #===========================================================================================================================
 # Benchmarking
@@ -246,7 +244,7 @@ def benchmark_dataloader(dataloader: DataLoader, num_batches: int = 100) -> floa
     return (end_time - start_time) / num_batches
 
 
-def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str, no_latency: bool = False) -> ModelStats:
+def benchmark_model(model: nn.Module, dataloader: DataLoader, device: str, name: str, no_latency: bool = False) -> ModelStats:
     """
     Benchmark a model for accuracy, latency, parameter count, and MACs.
 
@@ -256,6 +254,8 @@ def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str, no_late
         Model to benchmark.
     dataloader : DataLoader
         Testing dataloader.
+    device : str
+        The device to run evaluation on.
     name : str
         Name to be attached with the results.
     no_latency : bool
@@ -285,7 +285,7 @@ def benchmark_model(model: nn.Module, dataloader: DataLoader, name: str, no_late
 
     log.info(f"\tEvaluating")
     model.to(device)
-    accuracy = evaluate(model, dataloader)
+    accuracy = evaluate(model, dataloader, device)
 
     log.info(f"Benchmarking for {name} finished")
     return ModelStats(

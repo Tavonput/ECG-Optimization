@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../")
+
 import time
 import os
 import copy
@@ -13,7 +16,8 @@ from torch.optim.lr_scheduler import *
 
 from tqdm.auto import tqdm
 
-from system import *
+from .system import *
+from Dataset.dataset import DataLoaderSet
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
@@ -308,15 +312,16 @@ def evaluate(
     num_samples = 0
     num_correct = 0
 
-    for inputs, labels in tqdm(dataloader, desc="Eval", leave=False, disable=not verbose):
-        inputs = inputs.to(device)
-        labels = labels.to(device)
+    with torch.no_grad():
+        for inputs, labels in tqdm(dataloader, desc="Eval", leave=False, disable=not verbose):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
-        outputs = model(inputs)
-        outputs = outputs.argmax(dim=1)
+            outputs = model(inputs)
+            outputs = outputs.argmax(dim=1)
 
-        num_samples += labels.size(0)
-        num_correct += (outputs == labels).sum()
+            num_samples += labels.size(0)
+            num_correct += (outputs == labels).sum()
     
     return (num_correct / num_samples * 100).item()
 
@@ -391,7 +396,7 @@ def evaluate_per_class(
 def finetune(
     model:       nn.Module,
     epochs:      int,
-    dataloader:  Dict[str, DataLoader],
+    dataloader:  DataLoaderSet,
     save_path:   str,
     lr:          float = 0.01,
     safety:      int   = 0,
@@ -409,8 +414,8 @@ def finetune(
         Model to finetune.
     epochs : int
         Number of epochs to finetune.
-    dataloader : Dict {str : DataLoader}
-        Both train and test loaders in dict {name, DataLoader}.
+    dataloader : DataLoaderSet
+        The dataloaders.
     save_path : str
         Where to save the model. 
     lr : float
@@ -457,14 +462,14 @@ def finetune(
         epoch_start_time = time.time()
 
         train_start_time = time.time()
-        running_loss     = train(model, dataloader["train"], criterion, optimizer, scheduler, device)
+        running_loss     = train(model, dataloader.train_loader, criterion, optimizer, scheduler, device)
         train_end_time   = time.time()
 
         stats.running_train_time.append(train_end_time - train_start_time)
         stats.running_loss.append(running_loss)
 
         if do_eval:
-            accuracy = evaluate(model, dataloader["test"], device)
+            accuracy = evaluate(model, dataloader.test_loader, device=device)
             stats.running_accuracy.append(accuracy)
 
             if accuracy > stats.best_accuracy:

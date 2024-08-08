@@ -1,27 +1,30 @@
+import sys
+sys.path.append("../")
+
 import time
 import random
 import h5py
 import logging
 import os
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Any
 
 import torch
 
 from torchvision.transforms import Compose, ToTensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, DistributedSampler, Sampler
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 import psutil
 
+from Utils.system import *
+
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT)
 logging.getLogger("DTSET").setLevel(logging.INFO)
 log = logging.getLogger("DTSET")
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class EcgDataset(Dataset):
@@ -139,16 +142,28 @@ class EcgDataset(Dataset):
         return images_memory + labels_memory
     
 
+class DataLoaderSet():
+    """
+    Helper around PyTorch dataloaders.
+    """
+    def __init__(self) -> None:
+        self.train_loader: DataLoader = None
+        self.test_loader:  DataLoader = None
+
+        self.train_sampler: Sampler = None
+        
+
 def build_dataloader(
     train_path:     str, 
     test_path:      str, 
     batch_size:     int, 
-    transform, 
+    transform:      Any, 
     preload_train:  bool = False,
     preload_test:   bool = False,
     half_precision: bool = False,
-    max_memory:     float = 0.95
-) -> Union[Dict[str, DataLoader], None]:
+    max_memory:     float = 0.95,
+    distributed:    bool = False,
+) -> Union[DataLoaderSet, None]:
     """
     Build the train and test dataloaders from EcgDataset.
 
@@ -170,22 +185,17 @@ def build_dataloader(
         Whether or not the data should be loaded as FP16.
     max_memory : float
         Ratio of for the maximum amount of memory before sending a warning.
-        
+    distributed : bool
+        Whether or not the training data will be distributed.
+
     Returns
     -------
-    dataloaders : Dict {str , DataLoader}
-        Dictionary containing two entries:
-            "train": Training dataloader
-            "test":  Testing dataloader
+    dataloaders : DataLoaderSet
+        The dataloaders.
     None
         None if dataloader creation fails.
     """
-    if not os.path.exists(train_path):
-        log.error(f"{train_path} does not exist")
-        return None
-
-    if not os.path.exists(test_path):
-        log.error(f"{test_path} does not exist")
+    if check_path_exists(train_path) is False or check_path_exists(test_path) is False:
         return None
 
     if transform is None:
@@ -205,17 +215,24 @@ def build_dataloader(
         "test":  EcgDataset(test_path, transform=transforms["test"], preload=preload_test, half_precision=half_precision, max_memory=max_memory),       
     }
 
-    dataloader = {}
-    for split in ["train", "test"]:
-        dataloader[split] = DataLoader(
-            dataset[split],
-            batch_size  = batch_size,
-            shuffle     = (split == "train"),
-            num_workers = 0,
-            pin_memory  = True,
-        )
+    dataloaders = DataLoaderSet()
 
-    return dataloader
+    dataloaders.train_sampler = DistributedSampler(dataset["train"]) if distributed else None
+    dataloaders.train_loader  = DataLoader(
+        dataset["train"],
+        batch_size = batch_size,
+        shuffle    = (dataloaders.train_sampler is None),
+        pin_memory = True,
+        sampler    = dataloaders.train_sampler,
+    )
+    dataloaders.test_loader = DataLoader(
+        dataset["test"],
+        batch_size = batch_size,
+        shuffle    = False,
+        pin_memory = True,
+    )
+
+    return dataloaders
 
 
 def visualize_ecg_data(dataloader: DataLoader) -> None:
@@ -283,9 +300,6 @@ def benchmark_dataloader(loader: DataLoader, num_batches: int = 100) -> float:
 # Main (Used for testing this file)
 #
 if __name__ == "__main__":
-    import sys
-    sys.path.append("../")
-
     dataloader = build_dataloader(
         train_path = "../Data/MIT-BIH-Raw/Datasets/Resolution-64/image_unfiltered_i64_train.h5",
         test_path  = "../Data/MIT-BIH-Raw/Datasets/Resolution-64/image_unfiltered_i64_test.h5",

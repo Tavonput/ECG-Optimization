@@ -8,12 +8,16 @@ base_model:
   image_size: 128
   batch_size: 128
 
-  train_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_train.h5"
-  test_path: "../Data/MIT-BIH-Raw/Datasets/Resolution-128/image_resample_i128_test.h5"
-  save_dir: "../Pretrained/ECG-Raw/Base/Resample"
+  train_path: "/data/tavonputl/data/MIT-BIH/Datasets/Resolution-128/image_full_train.hdf5"
+  test_path: "/data/tavonputl/data/MIT-BIH/Datasets/Resolution-128/image_full_test.hdf5"
+  save_dir: "../Pretrained/MIT-BIH/Base/Full"
 
-  preload_train: True
-  preload_test: True
+  preload_train: False
+  preload_test: False
 
   evaluate: True
   save_best: True
+
+distributed:
+  do: True
+  world_size: 2
