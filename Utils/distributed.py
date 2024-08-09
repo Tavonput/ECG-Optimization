@@ -9,16 +9,15 @@ import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader, Dataset, DistributedSampler
+from torch.utils.data import DataLoader
 from torch.optim import *
 from torch.optim.lr_scheduler import *
 
+from tqdm.auto import tqdm
+
 from Dataset.dataset import DataLoaderSet
 from .system import *
-from .classification import (
-    TrainingStats,
-    train, evaluate
-)
+from .classification import TrainingStats, train
 
 
 LOG_FORMAT = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
@@ -27,7 +26,7 @@ logging.getLogger("DISTR").setLevel(logging.INFO)
 log = logging.getLogger("DISTR")
 
 
-def setup_distributed(rank: int, world_size: int, addr: str = "localhost", port: str = "12345") -> None:
+def init_process(rank: int, world_size: int, addr: str = "localhost", port: str = "12345") -> None:
     """
     Setup the distributed process group. Uses nccl as the backend.
 
@@ -48,9 +47,9 @@ def setup_distributed(rank: int, world_size: int, addr: str = "localhost", port:
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
 
-def cleanup_distributed(rank: int = None):
+def cleanup_process(rank: int = None):
     """
-    Cleanup pytorch distributed.
+    Cleanup pytorch distributed process.
 
     Parameters
     ----------
@@ -103,6 +102,53 @@ def get_ddp_model(model: nn.Module, rank: int) -> nn.Module:
         The rank of the current process.
     """
     return DDP(model, device_ids=[rank])
+
+@torch.inference_mode()
+def evaluate_distributed(
+    model:      nn.Module,
+    dataloader: DataLoader,
+    rank:       str,
+    verbose:    bool = True
+) -> float:
+    """
+    Evaluate a model in a distributed manner.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to evaluate.
+    dataloader : Dataloader
+        Testing dataloader.
+    rank : str
+        The rank of the current process.
+    verbose : bool
+        Verbosity.
+
+    Returns
+    -------
+    accuracy : float
+        The accuracy
+    """
+    model.eval()
+
+    num_samples = torch.tensor(0, dtype=torch.float32, device=rank, requires_grad=False)
+    num_correct = torch.tensor(0, dtype=torch.float32, device=rank, requires_grad=False)
+
+    with torch.no_grad():
+        for inputs, labels in tqdm(dataloader, desc="Eval", leave=False, disable=not verbose):
+            inputs = inputs.to(rank)
+            labels = labels.to(rank)
+
+            outputs = model(inputs)
+            outputs = outputs.argmax(dim=1)
+
+            num_samples += labels.size(0)
+            num_correct += (outputs == labels).sum()
+
+    dist.all_reduce(num_samples, op=dist.ReduceOp.SUM)
+    dist.all_reduce(num_correct, op=dist.ReduceOp.SUM)
+
+    return num_correct.item() / num_samples.item() * 100
 
 
 def finetune_distributed(
@@ -171,17 +217,19 @@ def finetune_distributed(
         stats.running_train_time.append(train_end_time - train_start_time)
         stats.running_loss.append(running_loss)
 
-        if do_eval and rank == 0:
-            accuracy = evaluate(ddp_model.module, dataloader.test_loader, device=rank)
+        if do_eval:
+            accuracy = evaluate_distributed(ddp_model.module, dataloader.test_loader, rank)
             stats.running_accuracy.append(accuracy)
 
             if accuracy > stats.best_accuracy:
-                if full_save:
-                    best_model_checkpoint["model"] = copy.deepcopy(ddp_model)
-                    
-                best_model_checkpoint["state_dict"] = copy.deepcopy(ddp_model.state_dict())
+                if rank == 0:
+                    if full_save:
+                        best_model_checkpoint["model"] = copy.deepcopy(ddp_model)
+                        
+                    best_model_checkpoint["state_dict"] = copy.deepcopy(ddp_model.state_dict())
                 stats.best_accuracy = accuracy
 
+            dist.barrier()
             epoch_end_time = time.time()
             log.info(f"\tRank {rank}: Epoch {epoch+1} Accuracy {accuracy:.2f}% / Best Accuracy: {stats.best_accuracy:.2f}%. Time: {(epoch_end_time - epoch_start_time)}s")
         else:

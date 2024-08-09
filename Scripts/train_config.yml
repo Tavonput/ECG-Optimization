@@ -2,9 +2,9 @@ base_model:
   model_name: "resnet18"
 
   # Null or path to checkpoint
-  resume_path: Null
+  resume_path: "../Pretrained/MIT-BIH/Base/Full/resnet18_ep3_i128/resnet18_ep3_i128.pth"
 
-  epochs: 50
+  epochs: 2
   image_size: 128
   batch_size: 128
 
@@ -20,4 +20,5 @@ base_model:
 
 distributed:
   do: True
+  resume_from_distributed: True
   world_size: 2

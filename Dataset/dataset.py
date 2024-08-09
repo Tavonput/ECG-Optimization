@@ -151,6 +151,7 @@ class DataLoaderSet():
         self.test_loader:  DataLoader = None
 
         self.train_sampler: Sampler = None
+        self.test_sampler:  Sampler = None
         
 
 def build_dataloader(
@@ -204,20 +205,21 @@ def build_dataloader(
         trans = Compose([ToTensor()] + transform)
     else:
         trans = Compose([ToTensor(), transform])
-
-    transforms = {
-        "train": trans,
-        "test":  trans
-    }
+    transforms = {"train": trans, "test": trans}
 
     dataset = {
         "train": EcgDataset(train_path, transform=transforms["train"], preload=preload_train, half_precision=half_precision, max_memory=max_memory),
         "test":  EcgDataset(test_path, transform=transforms["test"], preload=preload_test, half_precision=half_precision, max_memory=max_memory),       
     }
 
+    if distributed:
+        log.warning("Distributed Evaluation Warning: If the test set is not divisible by the number of processes, then extra samples will be added")
+
     dataloaders = DataLoaderSet()
 
     dataloaders.train_sampler = DistributedSampler(dataset["train"]) if distributed else None
+    dataloaders.test_sampler  = DistributedSampler(dataset["test"], shuffle=False) if distributed else None
+
     dataloaders.train_loader  = DataLoader(
         dataset["train"],
         batch_size = batch_size,
@@ -230,6 +232,7 @@ def build_dataloader(
         batch_size = batch_size,
         shuffle    = False,
         pin_memory = True,
+        sampler    = dataloaders.test_sampler,
     )
 
     return dataloaders
